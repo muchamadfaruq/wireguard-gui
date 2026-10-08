@@ -1,7 +1,7 @@
 import { config, ensureDataDirs } from './config';
 import { initDb } from './db';
 import { ensureBootstrapUser, purgeExpiredSessions } from './services/auth-service';
-import { bootstrapServerConfig } from './services/server-service';
+import { bootstrapServerConfig, restoreEnabledInterface } from './services/server-service';
 import { ensureHostWatcher } from './services/host-sync-service';
 import { getBackend } from './wg/backend';
 import { buildApp } from './app';
@@ -22,6 +22,15 @@ async function main(): Promise<void> {
   if (backend.kind === 'mock') {
     app.log.warn(
       'Running in MOCK mode: no real WireGuard binary detected. The interface is simulated.',
+    );
+  }
+
+  try {
+    await restoreEnabledInterface();
+  } catch (error) {
+    app.log.warn(
+      { err: error },
+      'Failed to restore the WireGuard interface on startup; check the interface state in Settings.',
     );
   }
 

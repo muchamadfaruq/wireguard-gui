@@ -93,13 +93,17 @@ function AddPeerDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="peer-allowed">Allowed IPs (optional)</Label>
+            <Label htmlFor="peer-allowed">Extra allowed IPs (optional)</Label>
             <Input
               id="peer-allowed"
-              placeholder="10.8.0.5/32"
+              placeholder="192.168.1.0/24"
               value={allowedIps}
               onChange={(e) => setAllowedIps(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              Additional networks routed to this device (for example a LAN behind it). The generated
+              tunnel address is always included, so this can usually be left empty.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="peer-keepalive">Persistent keepalive (optional)</Label>

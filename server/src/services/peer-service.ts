@@ -6,7 +6,7 @@ import { getBackend } from '../wg/backend';
 import { generateClientConfig } from '../wg/config';
 import { hostWritable, writeHostConfig } from '../wg/host-sync';
 import { generateKeyPair, generatePresharedKey } from '../wg/keys';
-import { nextFreeHostIp } from '../utils/ip';
+import { nextFreeHostIp, normalizePeerAllowedIps } from '../utils/ip';
 import { ApiError, notFound } from '../utils/http-error';
 import { getInterfaceStatus } from './server-service';
 
@@ -58,13 +58,22 @@ export async function createPeer(input: CreatePeerInput): Promise<Peer> {
   const { privateKey, publicKey } = await generateKeyPair();
   const presharedKey = input.usePresharedKey ? await generatePresharedKey() : null;
 
+  // The peer's own tunnel address must always be part of its server-side
+  // AllowedIPs, otherwise WireGuard silently drops all of its traffic.
+  let allowedIps: string;
+  try {
+    allowedIps = normalizePeerAllowedIps(input.allowedIps, `${ip}/32`);
+  } catch (error) {
+    throw new ApiError(400, error instanceof Error ? error.message : 'Invalid AllowedIPs');
+  }
+
   const peer = peerRepo.insert({
     name: input.name,
     publicKey,
     privateKey,
     presharedKey,
     address: `${ip}/32`,
-    allowedIps: input.allowedIps?.trim() || `${ip}/32`,
+    allowedIps,
     persistentKeepalive: input.persistentKeepalive ?? server.persistentKeepalive,
     enabled: true,
     notes: input.notes ?? null,
@@ -80,7 +89,15 @@ export async function updatePeer(
 ): Promise<Peer> {
   const before = peerRepo.get(id);
   if (!before) throw notFound('Peer not found');
-  const peer = peerRepo.update(id, patch);
+  const next = { ...patch };
+  if (next.allowedIps !== undefined) {
+    try {
+      next.allowedIps = normalizePeerAllowedIps(next.allowedIps, before.address);
+    } catch (error) {
+      throw new ApiError(400, error instanceof Error ? error.message : 'Invalid AllowedIPs');
+    }
+  }
+  const peer = peerRepo.update(id, next);
   await applyMutation(() => peerRepo.restore(before));
   return peer;
 }

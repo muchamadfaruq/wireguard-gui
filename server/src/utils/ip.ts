@@ -73,3 +73,56 @@ export function isValidIpv4Cidr(value: string): boolean {
     return false;
   }
 }
+
+/** Splits a comma-separated CIDR list (WireGuard `AllowedIPs`) into entries. */
+export function splitCidrList(value: string): string[] {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+/** Whether `address` (an IP or CIDR) falls inside the `cidr` network. */
+export function cidrContains(cidr: string, address: string): boolean {
+  const { network, netmask } = parseCidr(cidr);
+  const ip = address.split('/')[0] ?? '';
+  return ((ipToInt(ip) & netmask) >>> 0) === network;
+}
+
+/** Like {@link cidrContains} but returns `false` for malformed input instead of throwing. */
+export function isAddressInSubnet(address: string, subnet: string): boolean {
+  try {
+    return cidrContains(subnet, address);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Normalizes the server-side `AllowedIPs` of a peer so that the peer's own
+ * tunnel address is always included. Extra CIDRs (for example a remote LAN
+ * routed through the peer) are preserved. Throws on an invalid entry.
+ *
+ * Keeping the client address inside `AllowedIPs` is required by WireGuard's
+ * cryptokey routing: the server drops packets whose source is not allowed for
+ * the peer, and it cannot route replies to an address the peer does not own.
+ */
+export function normalizePeerAllowedIps(
+  allowedIps: string | null | undefined,
+  address: string,
+): string {
+  const entries = splitCidrList(allowedIps ?? '');
+  for (const entry of entries) {
+    if (!isValidIpv4Cidr(entry)) {
+      throw new Error(`Invalid AllowedIPs entry: ${entry}`);
+    }
+  }
+  const host = (address.split('/')[0] ?? '').trim();
+  // Peers imported from a host config may not have a tunnel address recorded;
+  // keep their explicit AllowedIPs unchanged in that case.
+  if (!host) return entries.join(', ');
+  const base = `${host}/32`;
+  if (entries.length === 0) return base;
+  if (entries.some((entry) => cidrContains(entry, base))) return entries.join(', ');
+  return [base, ...entries].join(', ');
+}

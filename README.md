@@ -137,9 +137,14 @@ mode (the container has its own network namespace):
 ## Using the app
 
 1. **Dashboard** – see status and toggle the interface power switch.
-2. **Peers** – add a peer, then use **QR** or **Config** to connect a device.
+2. **Peers** – add a peer, then use **QR** or **Config** to connect a device. The
+   optional *Extra allowed IPs* field routes additional networks to a device
+   (e.g. a LAN behind it); the device's tunnel address is always included.
 3. **Configs** – import `.conf` files from elsewhere and keep them handy.
 4. **Settings** – change the public endpoint, DNS, subnet, port, and password.
+   Changing the interface address, subnet, or MTU rebuilds the WireGuard
+   interface (connected clients reconnect automatically); other changes are
+   applied live.
 5. **Backup** – export a ZIP regularly; restore it any time.
 
 ## Local development

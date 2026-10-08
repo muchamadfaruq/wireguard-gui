@@ -90,6 +90,34 @@ export class RealWgBackend implements WgBackend {
     return { ...process.env };
   }
 
+  /**
+   * `wg syncconf` updates the WireGuard peer table but does not touch the kernel
+   * routing table (only `wg-quick up` does). Peers whose AllowedIPs are outside
+   * the interface subnet would therefore be unreachable. Add any missing routes
+   * so the server can actually deliver packets to every peer.
+   */
+  private async ensurePeerRoutes(iface: string, peers: Peer[]): Promise<void> {
+    const cidrs = new Set<string>();
+    for (const peer of peers) {
+      if (!peer.enabled) continue;
+      for (const entry of peer.allowedIps.split(',')) {
+        const value = entry.trim();
+        if (value) cidrs.add(value);
+      }
+    }
+    for (const cidr of cidrs) {
+      const existing = await run('ip', ['-4', 'route', 'show', 'dev', iface, 'match', cidr]);
+      if (existing.code === 0 && existing.stdout.trim()) continue;
+      const added = await run('ip', ['-4', 'route', 'add', cidr, 'dev', iface]);
+      if (added.code !== 0 && !/file exists/i.test(added.stderr)) {
+        throw new ApiError(
+          500,
+          `Failed to add route ${cidr} via ${iface}: ${added.stderr.trim() || added.stdout.trim()}`,
+        );
+      }
+    }
+  }
+
   async up(server: ServerConfig, peers: Peer[]): Promise<void> {
     const iface = config.env.WG_INTERFACE;
 
@@ -158,6 +186,12 @@ export class RealWgBackend implements WgBackend {
       }
     } finally {
       fs.rmSync(tmp, { force: true });
+    }
+
+    // The host owns routing in adopt mode; only manage routes for interfaces
+    // this app created.
+    if (!server.managedExternally) {
+      await this.ensurePeerRoutes(iface, peers);
     }
   }
 

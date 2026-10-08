@@ -6,7 +6,8 @@ import { getBackend } from '../wg/backend';
 import { getPreflightCached } from '../wg/preflight';
 import { hostWritable, writeHostConfig } from '../wg/host-sync';
 import { generateKeyPair } from '../wg/keys';
-import { serverAddressFromCidr } from '../utils/ip';
+import { isAddressInSubnet, isValidIpv4Cidr, serverAddressFromCidr } from '../utils/ip';
+import { ApiError } from '../utils/http-error';
 
 export async function bootstrapServerConfig(): Promise<void> {
   if (serverRepo.get()) return;
@@ -39,17 +40,90 @@ export function getServerConfigView(): Omit<ServerConfig, 'privateKey'> {
   return view;
 }
 
+/** Interface properties owned by the host in adopt mode (not editable). */
+const HOST_OWNED_FIELDS = ['address', 'subnet', 'listenPort', 'mtu'] as const;
+
 export async function updateServerConfig(
   patch: Partial<Omit<ServerConfig, 'id' | 'privateKey' | 'publicKey' | 'enabled'>>,
 ): Promise<ServerConfig> {
-  const updated = serverRepo.update(patch);
-  const backend = await getBackend();
-  const peers = peerRepo.list();
-  if (updated.managedExternally && updated.writeThrough && hostWritable(config.env.WG_INTERFACE)) {
-    writeHostConfig(config.env.WG_INTERFACE, peers);
+  const before = serverRepo.get();
+  if (!before) throw new Error('Server config not initialised');
+
+  if (before.managedExternally) {
+    for (const key of HOST_OWNED_FIELDS) {
+      if (patch[key] !== undefined && patch[key] !== before[key]) {
+        throw new ApiError(
+          409,
+          `"${key}" is owned by the host interface and cannot be changed in adopt mode`,
+        );
+      }
+    }
   }
-  if (updated.enabled) {
-    await backend.sync(updated, peers);
+
+  if (patch.subnet !== undefined && !isValidIpv4Cidr(patch.subnet)) {
+    throw new ApiError(400, `Invalid subnet: ${patch.subnet}`);
+  }
+  if (patch.address !== undefined && !isValidIpv4Cidr(patch.address)) {
+    throw new ApiError(400, `Invalid address: ${patch.address}`);
+  }
+
+  // Keep the server address inside the (possibly new) subnet. When the subnet
+  // changes without the address being edited, derive a valid one automatically.
+  const nextSubnet = patch.subnet ?? before.subnet;
+  let nextAddress = patch.address ?? before.address;
+  if (!isAddressInSubnet(nextAddress, nextSubnet)) {
+    if (patch.address === undefined || patch.address === before.address) {
+      nextAddress = serverAddressFromCidr(nextSubnet);
+    } else {
+      throw new ApiError(
+        400,
+        `Server address ${nextAddress} is not inside subnet ${nextSubnet}`,
+      );
+    }
+  }
+
+  const applied: Partial<Omit<ServerConfig, 'id' | 'privateKey' | 'publicKey' | 'enabled'>> = {
+    ...patch,
+  };
+  if (nextAddress !== (patch.address ?? before.address)) applied.address = nextAddress;
+
+  const peers = peerRepo.list();
+  const backend = await getBackend();
+  // Changing the interface address, its subnet or the MTU cannot be applied with
+  // `wg syncconf` (that only touches peers/keys/port), so the interface must be
+  // rebuilt. Everything else can be synced live.
+  const addressChanged = applied.address !== undefined && applied.address !== before.address;
+  const subnetChanged = patch.subnet !== undefined && patch.subnet !== before.subnet;
+  const mtuChanged = patch.mtu !== undefined && patch.mtu !== before.mtu;
+  const needsRestart = !before.managedExternally && (addressChanged || subnetChanged || mtuChanged);
+
+  let updated: ServerConfig;
+  let restarted = false;
+  try {
+    updated = serverRepo.update(applied);
+    if (updated.managedExternally && updated.writeThrough && hostWritable(config.env.WG_INTERFACE)) {
+      writeHostConfig(config.env.WG_INTERFACE, peers);
+    }
+    if (updated.enabled) {
+      if (needsRestart) {
+        restarted = true;
+        await backend.down(updated);
+        await backend.up(updated, peers);
+      } else {
+        await backend.sync(updated, peers);
+      }
+    }
+  } catch (error) {
+    serverRepo.update(before);
+    if (restarted) {
+      // Best effort: bring the interface back with the previous configuration.
+      try {
+        await backend.up(before, peers);
+      } catch {
+        // ignore — the original error is more useful
+      }
+    }
+    throw error;
   }
   return updated;
 }
@@ -86,6 +160,19 @@ export async function restartServer(): Promise<void> {
   await backend.down(server);
   await backend.up(server, peers);
   serverRepo.update({ enabled: true });
+}
+
+/**
+ * Brings the interface up on startup when it is marked enabled. Without this a
+ * host reboot (or a container restart after the interface is gone) would leave
+ * an "enabled" server offline until the user toggles it manually.
+ */
+export async function restoreEnabledInterface(): Promise<void> {
+  const server = serverRepo.get();
+  if (!server || !server.enabled || server.managedExternally) return;
+  const backend = await getBackend();
+  const peers = peerRepo.list();
+  await backend.up(server, peers);
 }
 
 export async function getInterfaceStatus(): Promise<InterfaceStatus> {

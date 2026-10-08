@@ -2,6 +2,7 @@ import { toast } from 'sonner';
 import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/lib/i18n';
 
 function fallbackCopy(value: string): boolean {
   try {
@@ -23,7 +24,7 @@ function fallbackCopy(value: string): boolean {
 
 export function CopyButton({
   value,
-  label = 'Copy',
+  label,
   className,
   variant = 'outline',
   disabled = false,
@@ -36,6 +37,7 @@ export function CopyButton({
   disabled?: boolean;
   title?: string;
 }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -52,10 +54,10 @@ export function CopyButton({
 
     if (ok) {
       setCopied(true);
-      toast.success('Copied to clipboard');
+      toast.success(t('common.copied'));
       setTimeout(() => setCopied(false), 1500);
     } else {
-      toast.error('Failed to copy');
+      toast.error(t('common.copyFailed'));
     }
   };
 
@@ -70,7 +72,7 @@ export function CopyButton({
       className={className}
     >
       {copied ? <Check /> : <Copy />}
-      {label}
+      {label ?? t('common.copy')}
     </Button>
   );
 }

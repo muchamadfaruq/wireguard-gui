@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { api } from '@/lib/api';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { ThemeProvider, useTheme } from '@/hooks/use-theme';
+import { I18nProvider } from '@/lib/i18n';
 import { AppShell } from '@/layouts/app-shell';
 import { FullScreenLoader } from '@/components/full-screen-loader';
 import { SetupPage } from '@/pages/setup';
@@ -79,12 +80,14 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AuthProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-          <AppToaster />
-        </AuthProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+            <AppToaster />
+          </AuthProvider>
+        </I18nProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

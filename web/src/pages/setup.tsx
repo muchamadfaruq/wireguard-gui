@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
 
 interface FormState {
   username: string;
@@ -90,22 +91,23 @@ function StepIndicator({ labels, step }: { labels: string[]; step: number }) {
 }
 
 function PreflightLine({ status }: { status: ReturnType<typeof useSetupStatus>['data'] }) {
+  const { t } = useI18n();
   if (!status) return null;
   const { preflight } = status;
   const kernelLabel =
     preflight.kernel === 'builtin' || preflight.kernel === 'loaded'
-      ? 'kernel'
+      ? t('setup.kernel')
       : preflight.kernel === 'missing'
-        ? 'userspace'
-        : 'unknown';
+        ? t('setup.userspace')
+        : t('setup.unknown');
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-      <Badge variant="secondary">wg {preflight.tools ? 'ready' : 'missing'}</Badge>
+      <Badge variant="secondary">{preflight.tools ? t('setup.wgReady') : t('setup.wgMissing')}</Badge>
       <Badge variant={preflight.kernel === 'missing' ? 'destructive' : 'secondary'}>
         {kernelLabel}: {preflight.kernel}
       </Badge>
       {preflight.userspace ? (
-        <Badge variant="secondary">fallback: {preflight.userspace}</Badge>
+        <Badge variant="secondary">{t('setup.fallback', { name: preflight.userspace })}</Badge>
       ) : null}
     </div>
   );
@@ -119,6 +121,7 @@ export function SetupPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { refresh } = useAuth();
+  const { t } = useI18n();
   const { data: status } = useSetupStatus();
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<'fresh' | 'adopt'>('fresh');
@@ -130,8 +133,11 @@ export function SetupPage() {
 
   // Step labels depend on whether we ask the adopt/fresh question.
   const labels = useMemo(
-    () => (hasHostConfig ? ['Account', 'Method', 'Network'] : ['Account', 'Network']),
-    [hasHostConfig],
+    () =>
+      hasHostConfig
+        ? [t('setup.step.account'), t('setup.step.method'), t('setup.step.network')]
+        : [t('setup.step.account'), t('setup.step.network')],
+    [hasHostConfig, t],
   );
   const methodStep = hasHostConfig ? 1 : -1;
   const networkStep = hasHostConfig ? 2 : 1;
@@ -160,12 +166,12 @@ export function SetupPage() {
       if (data.endpoint) {
         const endpoint = data.endpoint;
         setForm((prev) => ({ ...prev, endpoint }));
-        toast.success(`Detected public endpoint: ${endpoint}`);
+        toast.success(t('setup.toast.detected', { endpoint }));
       } else {
-        toast.error('Could not detect a public IP. Enter it manually.');
+        toast.error(t('setup.toast.detectNoIp'));
       }
     },
-    onError: () => toast.error('Detection failed. Enter the endpoint manually.'),
+    onError: () => toast.error(t('setup.toast.detectFailed')),
   });
 
   const submit = useMutation({
@@ -175,10 +181,11 @@ export function SetupPage() {
       await queryClient.invalidateQueries({ queryKey: ['setup-status'] });
       await refresh();
       if (result.warning) toast.warning(result.warning);
-      toast.success('Setup complete. Welcome!');
+      toast.success(t('setup.toast.complete'));
       navigate('/', { replace: true });
     },
-    onError: (error) => toast.error(error instanceof ApiError ? error.message : 'Setup failed'),
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : t('setup.toast.failed')),
   });
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -186,15 +193,15 @@ export function SetupPage() {
 
   const validateAccount = () => {
     if (!form.username.trim()) {
-      toast.error('Username is required');
+      toast.error(t('setup.usernameRequired'));
       return false;
     }
     if (form.password.length < 6) {
-      toast.error('Password must be at least 6 characters');
+      toast.error(t('setup.passwordTooShort'));
       return false;
     }
     if (form.password !== form.confirm) {
-      toast.error('Password confirmation does not match');
+      toast.error(t('setup.passwordMismatch'));
       return false;
     }
     return true;
@@ -248,15 +255,13 @@ export function SetupPage() {
             </span>
             {status ? (
               <Badge variant={status.backend === 'real' ? 'success' : 'secondary'}>
-                {status.backend === 'real' ? 'WireGuard detected' : 'Mock mode'}
+                {status.backend === 'real' ? t('setup.wgDetected') : t('setup.mockMode')}
               </Badge>
             ) : null}
           </div>
           <div>
-            <CardTitle className="text-xl">Welcome — let's set things up</CardTitle>
-            <CardDescription>
-              Create your administrator account and configure the WireGuard server.
-            </CardDescription>
+            <CardTitle className="text-xl">{t('setup.title')}</CardTitle>
+            <CardDescription>{t('setup.subtitle')}</CardDescription>
           </div>
           <StepIndicator labels={labels} step={step} />
           <PreflightLine status={status} />
@@ -266,7 +271,7 @@ export function SetupPage() {
             {step === 0 ? (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="setup-username">Admin username</Label>
+                  <Label htmlFor="setup-username">{t('setup.adminUsername')}</Label>
                   <Input
                     id="setup-username"
                     value={form.username}
@@ -275,7 +280,7 @@ export function SetupPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="setup-password">Password</Label>
+                  <Label htmlFor="setup-password">{t('setup.password')}</Label>
                   <Input
                     id="setup-password"
                     type="password"
@@ -283,10 +288,10 @@ export function SetupPage() {
                     onChange={(e) => set('password', e.target.value)}
                     required
                   />
-                  <p className="text-xs text-muted-foreground">At least 6 characters.</p>
+                  <p className="text-xs text-muted-foreground">{t('setup.passwordHint')}</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="setup-confirm">Confirm password</Label>
+                  <Label htmlFor="setup-confirm">{t('setup.confirmPassword')}</Label>
                   <Input
                     id="setup-confirm"
                     type="password"
@@ -297,7 +302,7 @@ export function SetupPage() {
                 </div>
                 {status?.requiresToken ? (
                   <div className="space-y-2">
-                    <Label htmlFor="setup-token">Setup token</Label>
+                    <Label htmlFor="setup-token">{t('setup.token')}</Label>
                     <Input
                       id="setup-token"
                       value={form.token}
@@ -312,8 +317,7 @@ export function SetupPage() {
             {step === methodStep ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  An existing WireGuard configuration was found in{' '}
-                  <code>{status?.preflight.hostDir}</code>. How would you like to proceed?
+                  {t('setup.methodIntro', { dir: status?.preflight.hostDir ?? '' })}
                 </p>
                 {hostConfigs.map((config) => (
                   <button
@@ -332,10 +336,13 @@ export function SetupPage() {
                   >
                     <FolderInput className="mt-0.5 h-5 w-5 text-primary" />
                     <div className="min-w-0">
-                      <p className="font-medium">Adopt "{config.interface}"</p>
+                      <p className="font-medium">{t('setup.adopt', { name: config.interface })}</p>
                       <p className="text-xs text-muted-foreground">
-                        {config.address ?? 'no address'} · port {config.listenPort ?? '—'} ·{' '}
-                        {config.peerCount} peer(s). The host keeps managing the interface.
+                        {t('setup.adoptDetail', {
+                          address: config.address ?? t('setup.noAddress'),
+                          port: config.listenPort ?? '—',
+                          count: config.peerCount,
+                        })}
                       </p>
                     </div>
                   </button>
@@ -350,11 +357,8 @@ export function SetupPage() {
                 >
                   <Plus className="mt-0.5 h-5 w-5 text-primary" />
                   <div className="min-w-0">
-                    <p className="font-medium">Start fresh</p>
-                    <p className="text-xs text-muted-foreground">
-                      Create a new server configuration managed entirely by this app. Use a
-                      different interface name/port to avoid conflicts.
-                    </p>
+                    <p className="font-medium">{t('setup.startFresh')}</p>
+                    <p className="text-xs text-muted-foreground">{t('setup.startFreshDetail')}</p>
                   </div>
                 </button>
               </div>
@@ -367,19 +371,14 @@ export function SetupPage() {
                     <div className="flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
                       <Server className="mt-0.5 h-4 w-4 text-primary" />
                       <div>
-                        <p className="font-medium">Adopting "{adoptInterface}"</p>
-                        <p className="text-xs text-muted-foreground">
-                          The interface lifecycle stays with the host. Peers imported from the host
-                          have no private key, so client configs/QR cannot be generated for them.
-                        </p>
+                        <p className="font-medium">{t('setup.adopting', { name: adoptInterface })}</p>
+                        <p className="text-xs text-muted-foreground">{t('setup.adoptingDetail')}</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between rounded-lg border p-3">
                       <div>
-                        <p className="text-sm font-medium">Write changes to host config</p>
-                        <p className="text-xs text-muted-foreground">
-                          Keep <code>/etc/wireguard</code> in sync (two-way). Recommended.
-                        </p>
+                        <p className="text-sm font-medium">{t('setup.writeThrough')}</p>
+                        <p className="text-xs text-muted-foreground">{t('setup.writeThroughDetail')}</p>
                       </div>
                       <Switch
                         checked={form.writeThrough}
@@ -390,11 +389,11 @@ export function SetupPage() {
                 ) : null}
 
                 <div className="space-y-2">
-                  <Label htmlFor="setup-endpoint">Public endpoint (host or IP)</Label>
+                  <Label htmlFor="setup-endpoint">{t('setup.endpoint')}</Label>
                   <div className="flex gap-2">
                     <Input
                       id="setup-endpoint"
-                      placeholder="vpn.example.com"
+                      placeholder={t('setup.endpointPlaceholder')}
                       value={form.endpoint}
                       onChange={(e) => set('endpoint', e.target.value)}
                     />
@@ -405,19 +404,17 @@ export function SetupPage() {
                       disabled={detect.isPending}
                     >
                       {detect.isPending ? <Loader2 className="animate-spin" /> : <Wand2 />}
-                      Detect
+                      {t('setup.detect')}
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Address clients use to reach this server. Leave blank to set it later.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('setup.endpointHint')}</p>
                 </div>
 
                 {hasHostConfig && mode === 'adopt' ? null : (
                   <>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="setup-subnet">Subnet (CIDR)</Label>
+                        <Label htmlFor="setup-subnet">{t('setup.subnet')}</Label>
                         <Input
                           id="setup-subnet"
                           value={form.subnet}
@@ -425,7 +422,7 @@ export function SetupPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="setup-port">Listen port</Label>
+                        <Label htmlFor="setup-port">{t('setup.listenPort')}</Label>
                         <Input
                           id="setup-port"
                           type="number"
@@ -434,7 +431,7 @@ export function SetupPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="setup-dns">DNS</Label>
+                        <Label htmlFor="setup-dns">{t('setup.dns')}</Label>
                         <Input
                           id="setup-dns"
                           value={form.dns}
@@ -442,7 +439,7 @@ export function SetupPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="setup-mtu">MTU</Label>
+                        <Label htmlFor="setup-mtu">{t('setup.mtu')}</Label>
                         <Input
                           id="setup-mtu"
                           type="number"
@@ -454,10 +451,8 @@ export function SetupPage() {
 
                     <div className="flex items-center justify-between rounded-lg border p-3">
                       <div>
-                        <p className="text-sm font-medium">Full tunnel (route all traffic)</p>
-                        <p className="text-xs text-muted-foreground">
-                          Push <code>0.0.0.0/0</code> to clients.
-                        </p>
+                        <p className="text-sm font-medium">{t('setup.fullTunnel')}</p>
+                        <p className="text-xs text-muted-foreground">{t('setup.fullTunnelHint')}</p>
                       </div>
                       <Switch
                         checked={form.useFullTunnel}
@@ -469,11 +464,11 @@ export function SetupPage() {
                       <div className="flex items-center gap-2">
                         <RadioTower className="h-4 w-4 text-muted-foreground" />
                         <div>
-                          <p className="text-sm font-medium">Start the interface now</p>
+                          <p className="text-sm font-medium">{t('setup.startInterface')}</p>
                           <p className="text-xs text-muted-foreground">
                             {status?.backend === 'mock'
-                              ? 'Simulated in mock mode.'
-                              : 'Bring the WireGuard tunnel up right away.'}
+                              ? t('setup.startInterfaceMock')
+                              : t('setup.startInterfaceHint')}
                           </p>
                         </div>
                       </div>
@@ -491,25 +486,25 @@ export function SetupPage() {
               {step > 0 ? (
                 <Button type="button" variant="outline" onClick={goBack}>
                   <ArrowLeft />
-                  Back
+                  {t('common.back')}
                 </Button>
               ) : (
                 <span />
               )}
               {step === 0 ? (
                 <Button type="button" onClick={nextFromAccount}>
-                  Continue
+                  {t('common.continue')}
                   <ArrowRight />
                 </Button>
               ) : step === methodStep ? (
                 <Button type="button" onClick={() => setStep(networkStep)}>
-                  Continue
+                  {t('common.continue')}
                   <ArrowRight />
                 </Button>
               ) : (
                 <Button type="submit" disabled={submit.isPending}>
                   {submit.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                  Finish setup
+                  {t('setup.finish')}
                 </Button>
               )}
             </div>

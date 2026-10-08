@@ -10,20 +10,23 @@ import { PageHeader } from '@/components/page-header';
 import { QrDialog } from '@/components/qr-dialog';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { formatDate } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
 
 function ClientCard({ config }: { config: ClientConfig }) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [qrOpen, setQrOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const remove = useMutation({
     mutationFn: () => api.deleteClient(config.id),
     onSuccess: () => {
-      toast.success('Config removed');
+      toast.success(t('clients.toast.removed'));
       setConfirmDelete(false);
       void queryClient.invalidateQueries({ queryKey: ['clients'] });
     },
-    onError: (error) => toast.error(error instanceof ApiError ? error.message : 'Delete failed'),
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : t('clients.toast.deleteFailed')),
   });
 
   return (
@@ -36,18 +39,20 @@ function ClientCard({ config }: { config: ClientConfig }) {
           <div className="min-w-0 flex-1">
             <p className="truncate font-medium">{config.name}</p>
             <p className="truncate text-xs text-muted-foreground">{config.filename}</p>
-            <p className="text-xs text-muted-foreground">Imported {formatDate(config.createdAt)}</p>
+            <p className="text-xs text-muted-foreground">
+              {t('clients.importedAt', { date: formatDate(config.createdAt) })}
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => setQrOpen(true)}>
             <QrCode />
-            QR
+            {t('common.qr')}
           </Button>
           <Button size="sm" variant="outline" asChild>
             <a href={downloadUrl(`/clients/${config.id}/config`)} download={config.filename}>
               <Download />
-              Download
+              {t('common.download')}
             </a>
           </Button>
           <Button
@@ -57,7 +62,7 @@ function ClientCard({ config }: { config: ClientConfig }) {
             onClick={() => setConfirmDelete(true)}
           >
             <Trash2 />
-            Remove
+            {t('common.remove')}
           </Button>
         </div>
       </CardContent>
@@ -65,8 +70,8 @@ function ClientCard({ config }: { config: ClientConfig }) {
       <QrDialog
         open={qrOpen}
         onOpenChange={setQrOpen}
-        title={`${config.name} — QR code`}
-        description="Scan with the WireGuard mobile app."
+        title={t('peers.qrTitle', { name: config.name })}
+        description={t('peers.qrDesc')}
         imageUrl={downloadUrl(`/clients/${config.id}/qr`)}
         downloadUrl={downloadUrl(`/clients/${config.id}/config`)}
         downloadName={config.filename}
@@ -75,9 +80,9 @@ function ClientCard({ config }: { config: ClientConfig }) {
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title="Remove config?"
-        description={`"${config.name}" will be deleted from the library.`}
-        confirmLabel="Remove"
+        title={t('clients.removeTitle')}
+        description={t('clients.removeDesc', { name: config.name })}
+        confirmLabel={t('common.remove')}
         destructive
         loading={remove.isPending}
         onConfirm={() => remove.mutate()}
@@ -88,6 +93,7 @@ function ClientCard({ config }: { config: ClientConfig }) {
 
 export function ClientsPage() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const { data: configs, isLoading } = useQuery({
     queryKey: ['clients'],
@@ -97,11 +103,11 @@ export function ClientsPage() {
   const upload = useMutation({
     mutationFn: (file: File) => api.uploadClient(file),
     onSuccess: (config) => {
-      toast.success(`Imported "${config.name}"`);
+      toast.success(t('clients.toast.imported', { name: config.name }));
       void queryClient.invalidateQueries({ queryKey: ['clients'] });
     },
     onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : 'Import failed'),
+      toast.error(error instanceof ApiError ? error.message : t('clients.toast.importFailed')),
   });
 
   const onPick = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,8 +119,8 @@ export function ClientsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Client configs"
-        description="Import and store WireGuard configurations from other servers or clients"
+        title={t('clients.title')}
+        description={t('clients.subtitle')}
         actions={
           <>
             <input
@@ -126,7 +132,7 @@ export function ClientsPage() {
             />
             <Button onClick={() => inputRef.current?.click()} disabled={upload.isPending}>
               {upload.isPending ? <Loader2 className="animate-spin" /> : <Upload />}
-              Import .conf
+              {t('common.import')}
             </Button>
           </>
         }
@@ -147,14 +153,11 @@ export function ClientsPage() {
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <FileText className="h-8 w-8 text-muted-foreground" />
-            <p className="font-medium">No imported configs</p>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Upload a WireGuard <code>.conf</code> file to keep it here for quick download or QR
-              sharing.
-            </p>
+            <p className="font-medium">{t('clients.empty')}</p>
+            <p className="max-w-sm text-sm text-muted-foreground">{t('clients.emptyHint')}</p>
             <Button onClick={() => inputRef.current?.click()}>
               <Upload />
-              Import .conf
+              {t('common.import')}
             </Button>
           </CardContent>
         </Card>

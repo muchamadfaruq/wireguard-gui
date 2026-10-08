@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Loader2, RefreshCw, Save, KeyRound, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Languages, Loader2, RefreshCw, Save, KeyRound, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
 import { CopyButton } from '@/components/copy-button';
+import { LANGUAGES, useI18n, type Locale } from '@/lib/i18n';
 
 interface FormState {
   endpoint: string;
@@ -37,6 +38,7 @@ const EMPTY: FormState = {
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
+  const { t, locale, setLocale } = useI18n();
   const { data, isLoading } = useQuery({
     queryKey: ['server-config'],
     queryFn: api.getServerConfig,
@@ -77,44 +79,48 @@ export function SettingsPage() {
         subnet: form.subnet.trim(),
       }),
     onSuccess: () => {
-      toast.success('Settings saved');
+      toast.success(t('settings.toast.saved'));
       void queryClient.invalidateQueries({ queryKey: ['server-config'] });
       void queryClient.invalidateQueries({ queryKey: ['status'] });
     },
     onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : 'Failed to save settings'),
+      toast.error(error instanceof ApiError ? error.message : t('settings.toast.saveFailed')),
   });
 
   const changePassword = useMutation({
     mutationFn: () => api.changePassword(passwords.current, passwords.next),
     onSuccess: () => {
-      toast.success('Password updated');
+      toast.success(t('settings.toast.passwordUpdated'));
       setPasswords({ current: '', next: '', confirm: '' });
     },
     onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : 'Failed to update password'),
+      toast.error(error instanceof ApiError ? error.message : t('settings.toast.passwordFailed')),
   });
 
   const toggleWriteThrough = useMutation({
     mutationFn: (enabled: boolean) => api.updateServerConfig({ writeThrough: enabled }),
     onSuccess: (_result, enabled) => {
-      toast.success(enabled ? 'Write-through enabled' : 'Write-through disabled');
+      toast.success(
+        t('settings.writeThroughToast', {
+          state: enabled ? t('settings.writeThroughOn') : t('settings.writeThroughOff'),
+        }),
+      );
       void queryClient.invalidateQueries({ queryKey: ['server-config'] });
       void queryClient.invalidateQueries({ queryKey: ['status'] });
     },
     onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : 'Failed to update write-through'),
+      toast.error(error instanceof ApiError ? error.message : t('settings.toast.writeThroughFailed')),
   });
 
   const reapply = useMutation({
     mutationFn: api.serverReapply,
     onSuccess: () => {
-      toast.success('Re-applied to host config and interface');
+      toast.success(t('settings.toast.reapplied'));
       void queryClient.invalidateQueries({ queryKey: ['server-config'] });
       void queryClient.invalidateQueries({ queryKey: ['status'] });
     },
     onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : 'Failed to re-apply'),
+      toast.error(error instanceof ApiError ? error.message : t('settings.toast.reapplyFailed')),
   });
 
   const onSubmitServer = (event: FormEvent) => {
@@ -125,11 +131,11 @@ export function SettingsPage() {
   const onSubmitPassword = (event: FormEvent) => {
     event.preventDefault();
     if (passwords.next.length < 6) {
-      toast.error('New password must be at least 6 characters');
+      toast.error(t('settings.passwordTooShort'));
       return;
     }
     if (passwords.next !== passwords.confirm) {
-      toast.error('Password confirmation does not match');
+      toast.error(t('settings.passwordMismatch'));
       return;
     }
     changePassword.mutate();
@@ -144,14 +150,36 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Settings" description="Server parameters and account security" />
+      <PageHeader title={t('settings.title')} description={t('settings.subtitle')} />
 
       <Card>
         <CardHeader>
-          <CardTitle>Server</CardTitle>
-          <CardDescription>
-            These values control how client configurations are generated.
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Languages className="h-5 w-5 text-muted-foreground" />
+            {t('common.language')}
+          </CardTitle>
+          <CardDescription>{t('common.languageDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <select
+            aria-label={t('common.language')}
+            value={locale}
+            onChange={(event) => setLocale(event.target.value as Locale)}
+            className="flex h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            {LANGUAGES.map((language) => (
+              <option key={language.code} value={language.code}>
+                {language.label}
+              </option>
+            ))}
+          </select>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('settings.server')}</CardTitle>
+          <CardDescription>{t('settings.serverDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -164,56 +192,51 @@ export function SettingsPage() {
             <form className="space-y-5" onSubmit={onSubmitServer}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="endpoint">Public endpoint (host or IP)</Label>
+                  <Label htmlFor="endpoint">{t('settings.endpoint')}</Label>
                   <Input
                     id="endpoint"
-                    placeholder="vpn.example.com"
+                    placeholder={t('settings.endpointPlaceholder')}
                     {...field('endpoint')}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Clients connect to this address on the listen port below.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('settings.endpointHint')}</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dns">DNS</Label>
+                  <Label htmlFor="dns">{t('settings.dns')}</Label>
                   <Input id="dns" {...field('dns')} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="allowedIps">Allowed IPs (client routing)</Label>
+                  <Label htmlFor="allowedIps">{t('settings.clientRouting')}</Label>
                   <Input id="allowedIps" {...field('allowedIps')} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="listenPort">Listen port</Label>
+                  <Label htmlFor="listenPort">{t('settings.listenPort')}</Label>
                   <Input id="listenPort" type="number" {...field('listenPort', adoptMode)} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="mtu">MTU</Label>
+                  <Label htmlFor="mtu">{t('settings.mtu')}</Label>
                   <Input id="mtu" type="number" {...field('mtu', adoptMode)} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="keepalive">Persistent keepalive</Label>
+                  <Label htmlFor="keepalive">{t('settings.keepalive')}</Label>
                   <Input id="keepalive" type="number" {...field('persistentKeepalive')} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="subnet">Subnet (CIDR)</Label>
+                  <Label htmlFor="subnet">{t('settings.subnet')}</Label>
                   <Input id="subnet" {...field('subnet', adoptMode)} />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="address">Server address</Label>
+                  <Label htmlFor="address">{t('settings.address')}</Label>
                   <Input id="address" {...field('address', adoptMode)} />
                 </div>
               </div>
 
               {adoptMode ? (
-                <p className="text-xs text-muted-foreground">
-                  Fields owned by the host interface (port, MTU, subnet, address) are read-only in
-                  adopt mode.
-                </p>
+                <p className="text-xs text-muted-foreground">{t('settings.adoptReadOnly')}</p>
               ) : null}
 
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">Server public key</p>
+                  <p className="text-sm font-medium">{t('settings.publicKey')}</p>
                   <p className="truncate font-mono text-xs text-muted-foreground">
                     {data?.publicKey ?? '—'}
                   </p>
@@ -223,7 +246,7 @@ export function SettingsPage() {
 
               <Button type="submit" disabled={saveServer.isPending}>
                 {saveServer.isPending ? <Loader2 className="animate-spin" /> : <Save />}
-                Save changes
+                {t('settings.save')}
               </Button>
             </form>
           )}
@@ -235,20 +258,15 @@ export function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-              Host config sync
+              {t('settings.hostSync')}
             </CardTitle>
-            <CardDescription>
-              Keep <code>/etc/wireguard</code> in sync with this app (two-way).
-            </CardDescription>
+            <CardDescription>{t('settings.hostSyncDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div className="min-w-0">
-                <p className="text-sm font-medium">Write-through to host config</p>
-                <p className="text-xs text-muted-foreground">
-                  Persist peer changes to the host file so they survive reboots. Manual edits to the
-                  file are also imported automatically.
-                </p>
+                <p className="text-sm font-medium">{t('settings.writeThrough')}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.writeThroughDesc')}</p>
               </div>
               <Switch
                 checked={Boolean(data?.writeThrough)}
@@ -260,16 +278,12 @@ export function SettingsPage() {
             {!status?.hostWritable ? (
               <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  The host config is not writable. Ensure <code>/etc/wireguard</code> is mounted
-                  read-write in <code>docker-compose.yml</code> (and add <code>:z</code> on SELinux
-                  systems).
-                </span>
+                <span>{t('settings.hostNotWritable')}</span>
               </div>
             ) : (
               <Badge variant="success" className="gap-1.5">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Host config is writable
+                {t('settings.hostWritable')}
               </Badge>
             )}
 
@@ -280,7 +294,7 @@ export function SettingsPage() {
               disabled={reapply.isPending}
             >
               {reapply.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-              Re-apply now
+              {t('settings.reapply')}
             </Button>
           </CardContent>
         </Card>
@@ -290,14 +304,14 @@ export function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-muted-foreground" />
-            Change password
+            {t('settings.changePassword')}
           </CardTitle>
-          <CardDescription>Update the administrator account password.</CardDescription>
+          <CardDescription>{t('settings.changePasswordDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="grid gap-4 sm:grid-cols-3" onSubmit={onSubmitPassword}>
             <div className="space-y-2">
-              <Label htmlFor="current">Current password</Label>
+              <Label htmlFor="current">{t('settings.currentPassword')}</Label>
               <Input
                 id="current"
                 type="password"
@@ -307,7 +321,7 @@ export function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="next">New password</Label>
+              <Label htmlFor="next">{t('settings.newPassword')}</Label>
               <Input
                 id="next"
                 type="password"
@@ -317,7 +331,7 @@ export function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirm">Confirm password</Label>
+              <Label htmlFor="confirm">{t('settings.confirmPassword')}</Label>
               <Input
                 id="confirm"
                 type="password"
@@ -329,7 +343,7 @@ export function SettingsPage() {
             <div className="sm:col-span-3">
               <Button type="submit" disabled={changePassword.isPending}>
                 {changePassword.isPending ? <Loader2 className="animate-spin" /> : <Save />}
-                Update password
+                {t('settings.updatePassword')}
               </Button>
             </div>
           </form>

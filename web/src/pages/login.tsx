@@ -8,9 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/use-auth';
 import { ApiError } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 
 export function LoginPage() {
   const { login } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -23,7 +25,7 @@ export function LoginPage() {
       await login(username, password);
       navigate('/', { replace: true });
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'Login failed');
+      toast.error(error instanceof ApiError ? error.message : t('login.failed'));
     } finally {
       setLoading(false);
     }
@@ -36,13 +38,13 @@ export function LoginPage() {
           <span className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
             <Shield className="h-6 w-6" />
           </span>
-          <CardTitle className="text-xl">WireGuard Console</CardTitle>
-          <CardDescription>Sign in to manage your VPN server</CardDescription>
+          <CardTitle className="text-xl">{t('login.title')}</CardTitle>
+          <CardDescription>{t('login.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">{t('login.username')}</Label>
               <Input
                 id="username"
                 autoComplete="username"
@@ -52,7 +54,7 @@ export function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('login.password')}</Label>
               <Input
                 id="password"
                 type="password"
@@ -64,7 +66,7 @@ export function LoginPage() {
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Loader2 className="animate-spin" /> : null}
-              Sign in
+              {t('login.submit')}
             </Button>
           </form>
         </CardContent>

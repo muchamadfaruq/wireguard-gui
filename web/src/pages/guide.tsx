@@ -14,21 +14,73 @@ import {
   Wifi,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/page-header';
 import { CopyButton } from '@/components/copy-button';
 import { cn } from '@/lib/utils';
+import { useI18n, type TranslationKey } from '@/lib/i18n';
 
 type OsKey = 'android' | 'ios' | 'windows' | 'macos' | 'linux';
 
-const OS_TABS: { key: OsKey; label: string; icon: typeof Smartphone }[] = [
-  { key: 'android', label: 'Android', icon: Smartphone },
-  { key: 'ios', label: 'iOS / iPadOS', icon: Apple },
-  { key: 'windows', label: 'Windows', icon: Monitor },
-  { key: 'macos', label: 'macOS', icon: Laptop },
-  { key: 'linux', label: 'Linux', icon: Terminal },
+const OS_TABS: { key: OsKey; labelKey: TranslationKey; icon: typeof Smartphone }[] = [
+  { key: 'android', labelKey: 'guide.os.android', icon: Smartphone },
+  { key: 'ios', labelKey: 'guide.os.ios', icon: Apple },
+  { key: 'windows', labelKey: 'guide.os.windows', icon: Monitor },
+  { key: 'macos', labelKey: 'guide.os.macos', icon: Laptop },
+  { key: 'linux', labelKey: 'guide.os.linux', icon: Terminal },
 ];
+
+const WIN_INSTALL = 'winget install WireGuard.WireGuard';
+const BREW_INSTALL = 'brew install wireguard-tools';
+const WG_QUICK = 'sudo wg-quick up ./wg0.conf\nsudo wg-quick down ./wg0.conf';
+const WG_SHOW = 'sudo wg show';
+const LINUX_INSTALL =
+  '# Debian / Ubuntu\nsudo apt install wireguard\n\n# Fedora\nsudo dnf install wireguard-tools\n\n# Arch\nsudo pacman -S wireguard-tools';
+const LINUX_PLACE = 'sudo install -m 600 wg0.conf /etc/wireguard/wg0.conf';
+const LINUX_UPDOWN = 'sudo wg-quick up wg0\nsudo wg-quick down wg0';
+const LINUX_ENABLE = 'sudo systemctl enable --now wg-quick@wg0';
+const LINUX_VERIFY = 'sudo wg show\nip -brief addr show wg0';
+
+interface GuideStep {
+  titleKey: TranslationKey;
+  bodyKey?: TranslationKey;
+  code?: string;
+  hintKey?: TranslationKey;
+}
+
+const GUIDE_STEPS: Record<OsKey, GuideStep[]> = {
+  android: [
+    { titleKey: 'guide.android.1.title', bodyKey: 'guide.android.1.body' },
+    { titleKey: 'guide.android.2.title', bodyKey: 'guide.android.2.body' },
+    { titleKey: 'guide.android.3.title', bodyKey: 'guide.android.3.body' },
+    { titleKey: 'guide.android.4.title', bodyKey: 'guide.android.4.body' },
+  ],
+  ios: [
+    { titleKey: 'guide.ios.1.title', bodyKey: 'guide.ios.1.body' },
+    { titleKey: 'guide.ios.2.title', bodyKey: 'guide.ios.2.body' },
+    { titleKey: 'guide.ios.3.title', bodyKey: 'guide.ios.3.body' },
+    { titleKey: 'guide.ios.4.title', bodyKey: 'guide.ios.4.body' },
+  ],
+  windows: [
+    { titleKey: 'guide.windows.1.title', bodyKey: 'guide.windows.1.body', code: WIN_INSTALL },
+    { titleKey: 'guide.windows.2.title', bodyKey: 'guide.windows.2.body' },
+    { titleKey: 'guide.windows.3.title', bodyKey: 'guide.windows.3.body' },
+    { titleKey: 'guide.windows.4.title', bodyKey: 'guide.windows.4.body' },
+  ],
+  macos: [
+    { titleKey: 'guide.macos.1.title', bodyKey: 'guide.macos.1.body', code: BREW_INSTALL },
+    { titleKey: 'guide.macos.2.title', bodyKey: 'guide.macos.2.body' },
+    { titleKey: 'guide.macos.3.title', bodyKey: 'guide.macos.3.body', code: WG_QUICK },
+    { titleKey: 'guide.macos.4.title', bodyKey: 'guide.macos.4.body', code: WG_SHOW },
+  ],
+  linux: [
+    { titleKey: 'guide.linux.1.title', code: LINUX_INSTALL },
+    { titleKey: 'guide.linux.2.title', bodyKey: 'guide.linux.2.body', code: LINUX_PLACE },
+    { titleKey: 'guide.linux.3.title', code: LINUX_UPDOWN },
+    { titleKey: 'guide.linux.4.title', bodyKey: 'guide.linux.4.body', code: LINUX_ENABLE, hintKey: 'guide.linux.4.hint' },
+    { titleKey: 'guide.linux.5.title', code: LINUX_VERIFY },
+  ],
+};
 
 function CodeBlock({ code }: { code: string }) {
   return (
@@ -37,14 +89,10 @@ function CodeBlock({ code }: { code: string }) {
         <code>{code}</code>
       </pre>
       <div className="absolute right-1.5 top-1.5">
-        <CopyButton value={code} label="" variant="ghost" title="Copy" />
+        <CopyButton value={code} label="" variant="ghost" />
       </div>
     </div>
   );
-}
-
-function Steps({ children }: { children: ReactNode }) {
-  return <ol className="space-y-4">{children}</ol>;
 }
 
 function Step({ n, title, children }: { n: number; title: string; children?: ReactNode }) {
@@ -61,167 +109,43 @@ function Step({ n, title, children }: { n: number; title: string; children?: Rea
   );
 }
 
-const CONTENT: Record<OsKey, ReactNode> = {
-  android: (
-    <Steps>
-      <Step n={1} title="Install the WireGuard app">
-        Install <strong>WireGuard</strong> from Google Play or F-Droid.
-      </Step>
-      <Step n={2} title="Add the tunnel">
-        Open the app and tap <strong>+</strong>, then <strong>Scan from QR code</strong>. Scan the QR
-        shown on the <strong>Peers</strong> page. If you downloaded the <code>.conf</code> file
-        instead, choose <strong>Import from file or archive</strong>.
-      </Step>
-      <Step n={3} title="Activate">
-        Tap the toggle next to the tunnel. Android asks to allow a VPN connection — approve it.
-      </Step>
-      <Step n={4} title="Verify">
-        A key icon appears in the status bar, and <strong>Peers</strong> shows a handshake within a few
-        seconds.
-      </Step>
-    </Steps>
-  ),
-  ios: (
-    <Steps>
-      <Step n={1} title="Install the WireGuard app">
-        Install <strong>WireGuard</strong> from the App Store.
-      </Step>
-      <Step n={2} title="Add the tunnel">
-        Tap <strong>+</strong> and choose <strong>Create from QR code</strong>, then scan the QR shown
-        on the <strong>Peers</strong> page. Alternatively, open the downloaded <code>.conf</code> in
-        the Files app and choose to open it with WireGuard.
-      </Step>
-      <Step n={3} title="Activate">
-        Toggle the tunnel on and allow the VPN configuration prompt.
-      </Step>
-      <Step n={4} title="Verify">
-        The VPN icon appears in the status bar, and <strong>Peers</strong> shows a handshake.
-      </Step>
-    </Steps>
-  ),
-  windows: (
-    <Steps>
-      <Step n={1} title="Install the WireGuard client">
-        <p>
-          Download it from wireguard.com/install, or install with winget:
-        </p>
-        <CodeBlock code="winget install WireGuard.WireGuard" />
-      </Step>
-      <Step n={2} title="Import the configuration">
-        On <strong>Peers</strong>, click <strong>Config</strong> to download the <code>.conf</code>{" "}
-        file. In the WireGuard client choose <strong>Add tunnel</strong> →{' '}
-        <strong>Import tunnel(s) from file…</strong> and select it. The desktop client cannot scan a
-        QR code.
-      </Step>
-      <Step n={3} title="Activate">
-        Click <strong>Activate</strong>.
-      </Step>
-      <Step n={4} title="Verify">
-        The client shows a recent <strong>Latest handshake</strong>, and <strong>Peers</strong> on this
-        console marks the device online.
-      </Step>
-    </Steps>
-  ),
-  macos: (
-    <Steps>
-      <Step n={1} title="Install the WireGuard client">
-        Install <strong>WireGuard</strong> from the Mac App Store, or for the command line use
-        Homebrew:
-        <CodeBlock code="brew install wireguard-tools" />
-      </Step>
-      <Step n={2} title="Import the configuration">
-        Download the <code>.conf</code> from <strong>Peers</strong> → <strong>Config</strong>. In the
-        app choose <strong>Import tunnel(s) from file…</strong> and select it.
-      </Step>
-      <Step n={3} title="Activate">
-        Toggle the tunnel on, or with the CLI:
-        <CodeBlock code={'sudo wg-quick up ./wg0.conf\nsudo wg-quick down ./wg0.conf'} />
-      </Step>
-      <Step n={4} title="Verify">
-        Check the app status, or run:
-        <CodeBlock code="sudo wg show" />
-      </Step>
-    </Steps>
-  ),
-  linux: (
-    <Steps>
-      <Step n={1} title="Install wireguard-tools">
-        <CodeBlock
-          code={
-            '# Debian / Ubuntu\nsudo apt install wireguard\n\n# Fedora\nsudo dnf install wireguard-tools\n\n# Arch\nsudo pacman -S wireguard-tools'
-          }
-        />
-      </Step>
-      <Step n={2} title="Place the configuration">
-        Download the <code>.conf</code> from <strong>Peers</strong> → <strong>Config</strong>, then
-        install it with root-only permissions:
-        <CodeBlock code="sudo install -m 600 wg0.conf /etc/wireguard/wg0.conf" />
-      </Step>
-      <Step n={3} title="Bring the tunnel up or down">
-        <CodeBlock code={'sudo wg-quick up wg0\nsudo wg-quick down wg0'} />
-      </Step>
-      <Step n={4} title="Start automatically on boot">
-        <p>
-          The systemd unit name is the interface name <em>without</em> the <code>.conf</code> suffix:
-        </p>
-        <CodeBlock code="sudo systemctl enable --now wg-quick@wg0" />
-        <p className="text-xs">
-          Correct: <code>wg-quick@wg0</code> · Wrong: <code>wg-quick@wg0.conf</code>
-        </p>
-      </Step>
-      <Step n={5} title="Verify">
-        <CodeBlock code={'sudo wg show\nip -brief addr show wg0'} />
-      </Step>
-    </Steps>
-  ),
-};
-
 export function GuidePage() {
+  const { t } = useI18n();
   const [os, setOs] = useState<OsKey>('android');
   const active = OS_TABS.find((tab) => tab.key === os)!;
+  const steps = GUIDE_STEPS[os];
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Client setup guide"
-        description="How to import and activate a WireGuard configuration on each operating system"
-      />
+      <PageHeader title={t('guide.title')} description={t('guide.subtitle')} />
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-            Get a configuration first
+            {t('guide.getConfig.title')}
           </CardTitle>
-          <CardDescription>
-            Every device needs its own peer so it gets unique keys and an address.
-          </CardDescription>
+          <CardDescription>{t('guide.getConfig.desc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex gap-3 rounded-lg border p-3">
               <QrCode className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
               <div className="text-sm">
-                <p className="font-medium">Mobile (QR code)</p>
-                <p className="text-muted-foreground">
-                  On <strong>Peers</strong>, click <strong>QR</strong> and scan it with the WireGuard
-                  app.
-                </p>
+                <p className="font-medium">{t('guide.getConfig.qrTitle')}</p>
+                <p className="text-muted-foreground">{t('guide.getConfig.qrDesc')}</p>
               </div>
             </div>
             <div className="flex gap-3 rounded-lg border p-3">
               <Download className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
               <div className="text-sm">
-                <p className="font-medium">Desktop (.conf file)</p>
-                <p className="text-muted-foreground">
-                  On <strong>Peers</strong>, click <strong>Config</strong> to download the file, then
-                  import it.
-                </p>
+                <p className="font-medium">{t('guide.getConfig.fileTitle')}</p>
+                <p className="text-muted-foreground">{t('guide.getConfig.fileDesc')}</p>
               </div>
             </div>
           </div>
           <Button variant="outline" asChild>
-            <Link to="/peers">Go to Peers</Link>
+            <Link to="/peers">{t('guide.getConfig.goToPeers')}</Link>
           </Button>
         </CardContent>
       </Card>
@@ -230,9 +154,9 @@ export function GuidePage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-muted-foreground" />
-            Step-by-step instructions
+            {t('guide.steps.title')}
           </CardTitle>
-          <CardDescription>Choose your operating system.</CardDescription>
+          <CardDescription>{t('guide.steps.desc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="flex flex-wrap gap-2">
@@ -249,16 +173,26 @@ export function GuidePage() {
                 )}
               >
                 <tab.icon className="h-4 w-4" />
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             ))}
           </div>
           <div className="border-t pt-5">
             <p className="mb-4 flex items-center gap-2 text-sm font-semibold">
               <active.icon className="h-4 w-4" />
-              {active.label}
+              {t(active.labelKey)}
             </p>
-            {CONTENT[os]}
+            <ol className="space-y-4">
+              {steps.map((step, index) => (
+                <Step key={step.titleKey} n={index + 1} title={t(step.titleKey)}>
+                  {step.bodyKey ? <p>{t(step.bodyKey)}</p> : null}
+                  {step.code ? <CodeBlock code={step.code} /> : null}
+                  {step.hintKey ? (
+                    <p className="text-xs">{t(step.hintKey)}</p>
+                  ) : null}
+                </Step>
+              ))}
+            </ol>
           </div>
         </CardContent>
       </Card>
@@ -267,23 +201,15 @@ export function GuidePage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Wifi className="h-5 w-5 text-muted-foreground" />
-            Verify the connection
+            {t('guide.verify.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            Once the tunnel is active, open <strong>Peers</strong> and look at the device card:
-          </p>
+          <p>{t('guide.verify.intro')}</p>
           <ul className="list-disc space-y-1 pl-5">
-            <li>
-              A recent <strong>Handshake</strong> (a few seconds ago) means the tunnel is established.
-            </li>
-            <li>
-              <strong>↓ / ↑</strong> counters increase as traffic flows.
-            </li>
-            <li>
-              The badge shows the device as <Badge variant="success">online</Badge>.
-            </li>
+            <li>{t('guide.verify.handshake')}</li>
+            <li>{t('guide.verify.counters')}</li>
+            <li>{t('guide.verify.badge')}</li>
           </ul>
         </CardContent>
       </Card>
@@ -292,42 +218,25 @@ export function GuidePage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-            Troubleshooting
+            {t('guide.trouble.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-muted-foreground">
           <div>
-            <p className="font-medium text-foreground">No handshake at all</p>
-            <p>
-              Make sure the server interface is running (<strong>Dashboard</strong>), the public
-              endpoint is set correctly (<strong>Settings</strong>), and the listen port is reachable
-              over UDP from the client network.
-            </p>
+            <p className="font-medium text-foreground">{t('guide.trouble.noHandshakeTitle')}</p>
+            <p>{t('guide.trouble.noHandshakeBody')}</p>
           </div>
           <div>
-            <p className="font-medium text-foreground">Linux: the service fails to start</p>
-            <p>
-              Use the interface name in the systemd unit: <code>wg-quick@wg0</code>, not{' '}
-              <code>wg-quick@wg0.conf</code>. Inspect errors with{' '}
-              <code>journalctl -xeu wg-quick@wg0</code>.
-            </p>
+            <p className="font-medium text-foreground">{t('guide.trouble.linuxServiceTitle')}</p>
+            <p>{t('guide.trouble.linuxServiceBody')}</p>
           </div>
           <div>
-            <p className="font-medium text-foreground">Tailscale or another VPN stops working</p>
-            <p>
-              A full tunnel (<code>AllowedIPs = 0.0.0.0/0</code>) takes over the default route and can
-              interfere with Tailscale policy routing. If you only need the VPN network, set
-              <strong> Allowed IPs (client routing)</strong> in <strong>Settings</strong> to your
-              WireGuard subnet (for example <code>10.8.0.0/24</code>) and download the configuration
-              again.
-            </p>
+            <p className="font-medium text-foreground">{t('guide.trouble.tailscaleTitle')}</p>
+            <p>{t('guide.trouble.tailscaleBody')}</p>
           </div>
           <div>
-            <p className="font-medium text-foreground">Desktop client cannot scan the QR code</p>
-            <p>
-              The Windows and macOS clients import <code>.conf</code> files. Use <strong>Config</strong>{' '}
-              to download the file instead of the QR code.
-            </p>
+            <p className="font-medium text-foreground">{t('guide.trouble.desktopQrTitle')}</p>
+            <p>{t('guide.trouble.desktopQrBody')}</p>
           </div>
         </CardContent>
       </Card>

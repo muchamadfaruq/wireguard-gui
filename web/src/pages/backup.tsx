@@ -7,22 +7,24 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/page-header';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { useI18n } from '@/lib/i18n';
 
 export function BackupPage() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<File | null>(null);
 
   const restore = useMutation({
     mutationFn: (file: File) => api.restoreBackup(file),
     onSuccess: (result) => {
-      toast.success(`Backup restored — ${result.peerCount} peer(s)`);
+      toast.success(t('backup.toast.restored', { count: result.peerCount }));
       if (result.warning) toast.warning(result.warning);
       setPending(null);
       void queryClient.invalidateQueries();
     },
     onError: (error) => {
-      toast.error(error instanceof ApiError ? error.message : 'Restore failed');
+      toast.error(error instanceof ApiError ? error.message : t('backup.toast.failed'));
       setPending(null);
     },
   });
@@ -35,28 +37,22 @@ export function BackupPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Backup & Restore"
-        description="Export or import your entire WireGuard GUI data"
-      />
+      <PageHeader title={t('backup.title')} description={t('backup.subtitle')} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Download className="h-5 w-5 text-muted-foreground" />
-              Export backup
+              {t('backup.export')}
             </CardTitle>
-            <CardDescription>
-              Downloads a ZIP archive containing the database, server config and imported client
-              configs.
-            </CardDescription>
+            <CardDescription>{t('backup.exportDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild>
               <a href={downloadUrl('/backup')} download>
                 <Download />
-                Download backup
+                {t('backup.download')}
               </a>
             </Button>
           </CardContent>
@@ -66,12 +62,9 @@ export function BackupPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UploadCloud className="h-5 w-5 text-muted-foreground" />
-              Restore backup
+              {t('backup.restore')}
             </CardTitle>
-            <CardDescription>
-              Upload a previously exported ZIP. Your current data is backed up automatically before
-              being replaced.
-            </CardDescription>
+            <CardDescription>{t('backup.restoreDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <input
@@ -87,14 +80,11 @@ export function BackupPage() {
               disabled={restore.isPending}
             >
               {restore.isPending ? <Loader2 className="animate-spin" /> : <UploadCloud />}
-              Choose backup file
+              {t('backup.choose')}
             </Button>
             <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>
-                Restoring replaces all current peers, server settings and imported configs. The
-                WireGuard interface will be restarted if it was enabled.
-              </span>
+              <span>{t('backup.warning')}</span>
             </div>
           </CardContent>
         </Card>
@@ -105,13 +95,9 @@ export function BackupPage() {
         onOpenChange={(open) => {
           if (!open) setPending(null);
         }}
-        title="Restore this backup?"
-        description={
-          pending
-            ? `"${pending.name}" will overwrite the current data. A safety copy of the current data is kept on the server.`
-            : undefined
-        }
-        confirmLabel="Restore"
+        title={t('backup.confirmTitle')}
+        description={pending ? t('backup.confirmDesc', { name: pending.name }) : undefined}
+        confirmLabel={t('backup.confirmLabel')}
         destructive
         loading={restore.isPending}
         onConfirm={() => pending && restore.mutate(pending)}

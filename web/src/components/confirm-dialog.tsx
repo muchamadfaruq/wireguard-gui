@@ -8,13 +8,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/lib/i18n';
 
 export function ConfirmDialog({
   open,
   onOpenChange,
   title,
   description,
-  confirmLabel = 'Confirm',
+  confirmLabel,
   destructive,
   loading,
   onConfirm,
@@ -28,6 +29,7 @@ export function ConfirmDialog({
   loading?: boolean;
   onConfirm: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -37,10 +39,10 @@ export function ConfirmDialog({
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant={destructive ? 'destructive' : 'default'} onClick={onConfirm} disabled={loading}>
-            {loading ? 'Working...' : confirmLabel}
+            {loading ? t('common.working') : (confirmLabel ?? t('common.confirm'))}
           </Button>
         </DialogFooter>
       </DialogContent>

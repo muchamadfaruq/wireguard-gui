@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/lib/i18n';
 
 export function QrDialog({
   open,
@@ -25,6 +26,7 @@ export function QrDialog({
   downloadUrl: string;
   downloadName: string;
 }) {
+  const { t } = useI18n();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
@@ -34,13 +36,13 @@ export function QrDialog({
         </DialogHeader>
         <div className="flex items-center justify-center rounded-lg bg-white p-4">
           {open ? (
-            <img src={imageUrl} alt="WireGuard QR code" className="h-64 w-64" />
+            <img src={imageUrl} alt={t('qr.alt')} className="h-64 w-64" />
           ) : null}
         </div>
         <Button asChild>
           <a href={downloadUrl} download={downloadName}>
             <Download />
-            Download config
+            {t('qr.download')}
           </a>
         </Button>
       </DialogContent>

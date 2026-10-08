@@ -32,7 +32,8 @@ import { OnlineBadge } from '@/components/status-badge';
 import { CopyButton } from '@/components/copy-button';
 import { QrDialog } from '@/components/qr-dialog';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { formatBytes, formatHandshake } from '@/lib/format';
+import { useFormat } from '@/hooks/use-format';
+import { useI18n } from '@/lib/i18n';
 
 function AddPeerDialog({
   open,
@@ -42,6 +43,7 @@ function AddPeerDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [usePsk, setUsePsk] = useState(true);
   const [allowedIps, setAllowedIps] = useState('');
@@ -56,7 +58,7 @@ function AddPeerDialog({
         persistentKeepalive: keepalive ? Number(keepalive) : undefined,
       }),
     onSuccess: () => {
-      toast.success('Peer created');
+      toast.success(t('peers.toast.created'));
       void queryClient.invalidateQueries({ queryKey: ['peers'] });
       void queryClient.invalidateQueries({ queryKey: ['status'] });
       setName('');
@@ -66,7 +68,7 @@ function AddPeerDialog({
       onOpenChange(false);
     },
     onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : 'Failed to create peer'),
+      toast.error(error instanceof ApiError ? error.message : t('peers.toast.createFailed')),
   });
 
   const onSubmit = (event: FormEvent) => {
@@ -78,35 +80,32 @@ function AddPeerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add peer</DialogTitle>
-          <DialogDescription>New keys and an IP address are generated automatically.</DialogDescription>
+          <DialogTitle>{t('peers.add.title')}</DialogTitle>
+          <DialogDescription>{t('peers.add.description')}</DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={onSubmit}>
           <div className="space-y-2">
-            <Label htmlFor="peer-name">Name</Label>
+            <Label htmlFor="peer-name">{t('peers.add.name')}</Label>
             <Input
               id="peer-name"
-              placeholder="e.g. laptop-faruq"
+              placeholder={t('peers.add.namePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="peer-allowed">Extra allowed IPs (optional)</Label>
+            <Label htmlFor="peer-allowed">{t('peers.add.extraAllowedIps')}</Label>
             <Input
               id="peer-allowed"
-              placeholder="192.168.1.0/24"
+              placeholder={t('peers.add.extraAllowedIpsPlaceholder')}
               value={allowedIps}
               onChange={(e) => setAllowedIps(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">
-              Additional networks routed to this device (for example a LAN behind it). The generated
-              tunnel address is always included, so this can usually be left empty.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('peers.add.extraAllowedIpsHint')}</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="peer-keepalive">Persistent keepalive (optional)</Label>
+            <Label htmlFor="peer-keepalive">{t('peers.add.keepalive')}</Label>
             <Input
               id="peer-keepalive"
               type="number"
@@ -119,18 +118,18 @@ function AddPeerDialog({
           </div>
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div>
-              <p className="text-sm font-medium">Use preshared key</p>
-              <p className="text-xs text-muted-foreground">Adds an extra layer of security.</p>
+              <p className="text-sm font-medium">{t('peers.add.psk')}</p>
+              <p className="text-xs text-muted-foreground">{t('peers.add.pskHint')}</p>
             </div>
             <Switch checked={usePsk} onCheckedChange={setUsePsk} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('peers.add.cancel')}
             </Button>
             <Button type="submit" disabled={create.isPending || !name.trim()}>
               {create.isPending ? <Loader2 className="animate-spin" /> : <Plus />}
-              Create peer
+              {t('peers.add.create')}
             </Button>
           </DialogFooter>
         </form>
@@ -141,6 +140,8 @@ function AddPeerDialog({
 
 function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
+  const { handshake, bytes } = useFormat();
   const [qrOpen, setQrOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
@@ -153,28 +154,30 @@ function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
   const toggle = useMutation({
     mutationFn: (enabled: boolean) => api.updatePeer(peer.id, { enabled }),
     onSuccess: invalidate,
-    onError: (error) => toast.error(error instanceof ApiError ? error.message : 'Update failed'),
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : t('peers.toast.updateFailed')),
   });
 
   const remove = useMutation({
     mutationFn: () => api.deletePeer(peer.id),
     onSuccess: () => {
-      toast.success('Peer deleted');
+      toast.success(t('peers.toast.deleted'));
       setConfirmDelete(false);
       invalidate();
     },
-    onError: (error) => toast.error(error instanceof ApiError ? error.message : 'Delete failed'),
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : t('peers.toast.deleteFailed')),
   });
 
   const regen = useMutation({
     mutationFn: () => api.regeneratePeer(peer.id),
     onSuccess: () => {
-      toast.success('Keys regenerated');
+      toast.success(t('peers.toast.regen'));
       setConfirmRegen(false);
       invalidate();
     },
     onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : 'Regenerate failed'),
+      toast.error(error instanceof ApiError ? error.message : t('peers.toast.regenFailed')),
   });
 
   return (
@@ -184,7 +187,7 @@ function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <p className="truncate font-medium">{peer.name}</p>
-              {!peer.enabled ? <Badge variant="secondary">Disabled</Badge> : null}
+              {!peer.enabled ? <Badge variant="secondary">{t('common.disabled')}</Badge> : null}
             </div>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {peer.address} · {peer.allowedIps}
@@ -194,19 +197,17 @@ function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-          <span>↓ {formatBytes(peer.status?.transferRx ?? 0)}</span>
-          <span>↑ {formatBytes(peer.status?.transferTx ?? 0)}</span>
-          <span>Handshake {formatHandshake(peer.status?.latestHandshake ?? null)}</span>
+          <span>↓ {bytes(peer.status?.transferRx ?? 0)}</span>
+          <span>↑ {bytes(peer.status?.transferTx ?? 0)}</span>
+          <span>{t('peers.handshake', { time: handshake(peer.status?.latestHandshake ?? null) })}</span>
         </div>
 
         <p className="truncate font-mono text-xs text-muted-foreground">{peer.publicKey}</p>
 
         {!peer.hasPrivateKey ? (
           <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-            Imported from an external interface — private key unavailable, so no client config/QR.
-            {canRekey
-              ? ' Use "Recreate" to generate a new key (the device must re-import).'
-              : ' Enable write-through in Settings to recreate it.'}
+            {t('peers.imported')}{' '}
+            {canRekey ? t('peers.importedRekey') : t('peers.importedEnableWrite')}
           </p>
         ) : null}
 
@@ -216,16 +217,16 @@ function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
             variant="outline"
             onClick={() => setQrOpen(true)}
             disabled={!peer.hasPrivateKey}
-            title={peer.hasPrivateKey ? 'Show QR code' : 'Private key unavailable'}
+            title={peer.hasPrivateKey ? t('peers.showQr') : t('peers.privateKeyUnavailable')}
           >
             <QrCode />
-            QR
+            {t('common.qr')}
           </Button>
           <CopyButton
             value={peer.config}
-            label="Copy"
+            label={t('common.copy')}
             disabled={!peer.hasPrivateKey}
-            title={peer.hasPrivateKey ? 'Copy client config' : 'Private key unavailable'}
+            title={peer.hasPrivateKey ? t('peers.copyClientConfig') : t('peers.privateKeyUnavailable')}
           />
           <Button size="sm" variant="outline" asChild disabled={!peer.hasPrivateKey}>
             <a
@@ -235,7 +236,7 @@ function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
               className={!peer.hasPrivateKey ? 'pointer-events-none opacity-50' : ''}
             >
               <Download />
-              Config
+              {t('common.config')}
             </a>
           </Button>
           <Button
@@ -245,10 +246,10 @@ function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
             disabled={!peer.hasPrivateKey && !canRekey}
             title={
               peer.hasPrivateKey
-                ? 'Regenerate keys'
+                ? t('peers.regenKeys')
                 : canRekey
-                  ? 'Recreate with new keys (device must re-import)'
-                  : 'Private key unavailable (external peer)'
+                  ? t('peers.recreateKeys')
+                  : t('peers.privateKeyUnavailable')
             }
           >
             <RefreshCw />
@@ -258,12 +259,12 @@ function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
             variant="ghost"
             onClick={() => setConfirmDelete(true)}
             className="text-destructive hover:text-destructive"
-            title="Delete peer"
+            title={t('peers.deletePeer')}
           >
             <Trash2 />
           </Button>
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Enabled</span>
+            <span className="text-xs text-muted-foreground">{t('peers.enabled')}</span>
             <Switch
               checked={peer.enabled}
               disabled={toggle.isPending}
@@ -276,8 +277,8 @@ function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
       <QrDialog
         open={qrOpen}
         onOpenChange={setQrOpen}
-        title={`${peer.name} — QR code`}
-        description="Scan with the WireGuard mobile app to import this peer."
+        title={t('peers.qrTitle', { name: peer.name })}
+        description={t('peers.qrDesc')}
         imageUrl={downloadUrl(`/peers/${peer.id}/qr`)}
         downloadUrl={downloadUrl(`/peers/${peer.id}/config`)}
         downloadName={`${peer.name}.conf`}
@@ -286,9 +287,9 @@ function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title="Delete peer?"
-        description={`This permanently removes "${peer.name}" and revokes its access.`}
-        confirmLabel="Delete"
+        title={t('peers.deleteTitle')}
+        description={t('peers.deleteDesc', { name: peer.name })}
+        confirmLabel={t('common.delete')}
         destructive
         loading={remove.isPending}
         onConfirm={() => remove.mutate()}
@@ -297,13 +298,9 @@ function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
       <ConfirmDialog
         open={confirmRegen}
         onOpenChange={setConfirmRegen}
-        title={peer.hasPrivateKey ? 'Regenerate keys?' : 'Recreate with new keys?'}
-        description={
-          peer.hasPrivateKey
-            ? 'The peer will need to import a new configuration; the old one stops working.'
-            : 'A new key pair will be generated and written to /etc/wireguard. The existing device stops working until it imports the new configuration.'
-        }
-        confirmLabel={peer.hasPrivateKey ? 'Regenerate' : 'Recreate'}
+        title={peer.hasPrivateKey ? t('peers.regenTitle') : t('peers.recreateTitle')}
+        description={peer.hasPrivateKey ? t('peers.regenDesc') : t('peers.recreateDesc')}
+        confirmLabel={peer.hasPrivateKey ? t('peers.regenerate') : t('peers.recreate')}
         loading={regen.isPending}
         onConfirm={() => regen.mutate()}
       />
@@ -312,6 +309,7 @@ function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
 }
 
 export function PeersPage() {
+  const { t } = useI18n();
   const [addOpen, setAddOpen] = useState(false);
   const { data: peers, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['peers'],
@@ -328,17 +326,17 @@ export function PeersPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Peers"
-        description="Devices connected to your WireGuard server"
+        title={t('peers.title')}
+        description={t('peers.subtitle')}
         actions={
           <>
             <Button variant="outline" onClick={() => void refetch()} disabled={isFetching}>
               <RefreshCw className={isFetching ? 'animate-spin' : ''} />
-              Refresh
+              {t('common.refresh')}
             </Button>
             <Button onClick={() => setAddOpen(true)}>
               <UserPlus />
-              Add peer
+              {t('peers.add')}
             </Button>
           </>
         }
@@ -346,12 +344,8 @@ export function PeersPage() {
 
       {status?.managedExternally ? (
         <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
-          <strong>Adopt mode:</strong> the interface is managed by the host from{' '}
-          <code>/etc/wireguard</code>. Peers imported from the host have no private key, so QR/Config
-          are unavailable for them. Add a peer here, or use <strong>Recreate</strong> to generate new
-          keys. {status.writeThrough
-            ? 'Changes are written back to the host config.'
-            : 'Enable write-through in Settings to persist changes to the host config.'}
+          {t('peers.adoptNotice')}{' '}
+          {status.writeThrough ? t('peers.adoptNoticeWriteOn') : t('peers.adoptNoticeWriteOff')}
         </div>
       ) : null}
 
@@ -361,7 +355,7 @@ export function PeersPage() {
           <Skeleton className="h-40 w-full" />
         </div>
       ) : isError ? (
-        <p className="text-sm text-destructive">Failed to load peers.</p>
+        <p className="text-sm text-destructive">{t('peers.loadFailed')}</p>
       ) : peers && peers.length > 0 ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {peers.map((peer) => (
@@ -372,13 +366,11 @@ export function PeersPage() {
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <KeyRound className="h-8 w-8 text-muted-foreground" />
-            <p className="font-medium">No peers yet</p>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Add your first peer to generate a configuration and QR code.
-            </p>
+            <p className="font-medium">{t('peers.empty')}</p>
+            <p className="max-w-sm text-sm text-muted-foreground">{t('peers.emptyHint')}</p>
             <Button onClick={() => setAddOpen(true)}>
               <Plus />
-              Add peer
+              {t('peers.add')}
             </Button>
           </CardContent>
         </Card>

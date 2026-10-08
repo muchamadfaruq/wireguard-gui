@@ -18,17 +18,19 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
+import { useI18n, type TranslationKey } from '@/lib/i18n';
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', icon: Activity, end: true },
-  { to: '/peers', label: 'Peers', icon: Users, end: false },
-  { to: '/guide', label: 'Guide', icon: BookOpen, end: false },
-  { to: '/clients', label: 'Configs', icon: FileText, end: false },
-  { to: '/backup', label: 'Backup', icon: ArchiveRestore, end: false },
-  { to: '/settings', label: 'Settings', icon: Settings, end: false },
+const NAV_ITEMS: { to: string; labelKey: TranslationKey; icon: typeof Activity; end: boolean }[] = [
+  { to: '/', labelKey: 'nav.dashboard', icon: Activity, end: true },
+  { to: '/peers', labelKey: 'nav.peers', icon: Users, end: false },
+  { to: '/guide', labelKey: 'nav.guide', icon: BookOpen, end: false },
+  { to: '/clients', labelKey: 'nav.configs', icon: FileText, end: false },
+  { to: '/backup', labelKey: 'nav.backup', icon: ArchiveRestore, end: false },
+  { to: '/settings', labelKey: 'nav.settings', icon: Settings, end: false },
 ];
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
+  const { t } = useI18n();
   return (
     <nav className="flex flex-col gap-1">
       {NAV_ITEMS.map((item) => (
@@ -47,7 +49,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
           }
         >
           <item.icon className="h-4 w-4" />
-          {item.label}
+          {t(item.labelKey)}
         </NavLink>
       ))}
     </nav>
@@ -57,6 +59,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
 export function AppShell() {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
+  const { t } = useI18n();
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const current = NAV_ITEMS.find((item) =>
@@ -71,22 +74,22 @@ export function AppShell() {
             <Shield className="h-5 w-5" />
           </span>
           <div className="leading-tight">
-            <p className="font-semibold">WireGuard</p>
-            <p className="text-xs text-muted-foreground">Management Console</p>
+            <p className="font-semibold">{t('app.title')}</p>
+            <p className="text-xs text-muted-foreground">{t('app.subtitle')}</p>
           </div>
         </div>
         <NavItems />
         <div className="mt-auto space-y-2 pt-6">
           <Button variant="ghost" className="w-full justify-start gap-3" onClick={toggle}>
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            {theme === 'dark' ? t('theme.light') : t('theme.dark')}
           </Button>
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{user?.username}</p>
-              <p className="text-xs text-muted-foreground">Administrator</p>
+              <p className="text-xs text-muted-foreground">{t('user.role')}</p>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => void logout()} title="Log out">
+            <Button variant="ghost" size="icon" onClick={() => void logout()} title={t('user.logout')}>
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
@@ -98,13 +101,13 @@ export function AppShell() {
           <Button variant="outline" size="icon" onClick={() => setMenuOpen(true)}>
             <Menu className="h-4 w-4" />
           </Button>
-          <span className="font-semibold">{current?.label ?? 'WireGuard'}</span>
+          <span className="font-semibold">{current ? t(current.labelKey) : t('app.title')}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={toggle} title="Toggle theme">
+          <Button variant="ghost" size="icon" onClick={toggle} title={t('theme.toggle')}>
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => void logout()} title="Log out">
+          <Button variant="ghost" size="icon" onClick={() => void logout()} title={t('user.logout')}>
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
@@ -114,7 +117,7 @@ export function AppShell() {
         <DialogContent className="max-w-xs">
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            WireGuard
+            {t('app.title')}
           </DialogTitle>
           <NavItems onNavigate={() => setMenuOpen(false)} />
         </DialogContent>
@@ -138,7 +141,7 @@ export function AppShell() {
             }
           >
             <item.icon className="h-5 w-5" />
-            {item.label}
+            {t(item.labelKey)}
           </NavLink>
         ))}
       </nav>

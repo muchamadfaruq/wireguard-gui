@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   Activity,
   ArchiveRestore,
+  BookOpen,
   LogOut,
   Menu,
   Moon,
@@ -21,6 +22,7 @@ import { useTheme } from '@/hooks/use-theme';
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: Activity, end: true },
   { to: '/peers', label: 'Peers', icon: Users, end: false },
+  { to: '/guide', label: 'Guide', icon: BookOpen, end: false },
   { to: '/clients', label: 'Configs', icon: FileText, end: false },
   { to: '/backup', label: 'Backup', icon: ArchiveRestore, end: false },
   { to: '/settings', label: 'Settings', icon: Settings, end: false },

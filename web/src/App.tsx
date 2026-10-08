@@ -10,6 +10,7 @@ import { SetupPage } from '@/pages/setup';
 import { LoginPage } from '@/pages/login';
 import { DashboardPage } from '@/pages/dashboard';
 import { PeersPage } from '@/pages/peers';
+import { GuidePage } from '@/pages/guide';
 import { ClientsPage } from '@/pages/clients';
 import { BackupPage } from '@/pages/backup';
 import { SettingsPage } from '@/pages/settings';
@@ -63,6 +64,7 @@ function AppRoutes() {
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
           <Route path="peers" element={<PeersPage />} />
+          <Route path="guide" element={<GuidePage />} />
           <Route path="clients" element={<ClientsPage />} />
           <Route path="backup" element={<BackupPage />} />
           <Route path="settings" element={<SettingsPage />} />

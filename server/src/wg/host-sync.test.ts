@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { composeHostConfig, hashContent, readInterfaceBlock, renderPeerBlocks } from './host-sync';
+import {
+  composeHostConfig,
+  hashContent,
+  readInterfaceBlock,
+  renderPeerBlocks,
+  selectPreservedHostPeers,
+} from './host-sync';
+import type { HostPeer } from './adopt';
 import type { Peer } from '../types';
 
 const INTERFACE = `[Interface]
@@ -72,5 +79,32 @@ describe('host-sync', () => {
   it('produces a stable content hash', () => {
     expect(hashContent('abc')).toBe(hashContent('abc'));
     expect(hashContent('abc')).not.toBe(hashContent('abd'));
+  });
+
+  describe('preserving host-only peers on write', () => {
+    const hostPeers: HostPeer[] = [
+      { publicKey: 'ALICE=', name: 'alice', allowedIps: '10.10.0.2/32', persistentKeepalive: 25 },
+      { publicKey: 'CAROL=', name: 'carol', allowedIps: '10.10.0.9/32' },
+    ];
+
+    it('keeps host peers that the database does not know about', () => {
+      const preserved = selectPreservedHostPeers(hostPeers, [peer() /* ALICE */]);
+      expect(preserved.map((p) => p.publicKey)).toEqual(['CAROL=']);
+    });
+
+    it('drops host peers that are explicitly removed', () => {
+      const preserved = selectPreservedHostPeers(hostPeers, [], ['CAROL=']);
+      expect(preserved.map((p) => p.publicKey)).toEqual(['ALICE=']);
+    });
+
+    it('composes the config including preserved host peers', () => {
+      const next = composeHostConfig(readInterfaceBlock(FILE), [peer()], [
+        { publicKey: 'CAROL=', name: 'carol', allowedIps: '10.10.0.9/32' },
+      ]);
+      expect(next).toContain('PublicKey = ALICE=');
+      expect(next).toContain('# carol');
+      expect(next).toContain('PublicKey = CAROL=');
+      expect(readInterfaceBlock(next)).toBe(readInterfaceBlock(FILE));
+    });
   });
 });

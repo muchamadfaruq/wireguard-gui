@@ -15,13 +15,18 @@ import { getInterfaceStatus } from './server-service';
  * adopt mode) and applies it to the running interface. On failure the provided
  * rollback is executed so the database stays consistent with the host file.
  */
-async function applyMutation(rollback?: () => void): Promise<void> {
+interface MutationOptions {
+  /** Public keys to drop from the host file (explicit deletes). */
+  removePublicKeys?: string[];
+}
+
+async function applyMutation(rollback?: () => void, options: MutationOptions = {}): Promise<void> {
   const server = serverRepo.get();
   if (!server) return;
   const iface = config.env.WG_INTERFACE;
   try {
     if (server.managedExternally && server.writeThrough && hostWritable(iface)) {
-      writeHostConfig(iface, peerRepo.list());
+      writeHostConfig(iface, peerRepo.list(), { removePublicKeys: options.removePublicKeys });
     }
     if (server.enabled) {
       const backend = await getBackend();
@@ -84,7 +89,7 @@ export async function deletePeer(id: string): Promise<void> {
   const before = peerRepo.get(id);
   if (!before) throw notFound('Peer not found');
   peerRepo.delete(id);
-  await applyMutation(() => peerRepo.restore(before));
+  await applyMutation(() => peerRepo.restore(before), { removePublicKeys: [before.publicKey] });
 }
 
 export async function regeneratePeerKeys(id: string): Promise<Peer> {

@@ -5,7 +5,7 @@ import { config } from '../config';
 import { peerRepo, serverRepo } from '../db/repositories';
 import type { Peer, ServerConfig } from '../types';
 import { subnetFromAddress } from '../utils/ip';
-import { hostConfigPath, parseHostConfig } from './adopt';
+import { hostConfigPath, parseHostConfig, type HostPeer } from './adopt';
 import { derivePublicKey } from './keys';
 
 /**
@@ -61,8 +61,46 @@ export function renderPeerBlocks(peers: Peer[]): string {
   return blocks.join('\n\n');
 }
 
-export function composeHostConfig(interfaceBlock: string, peers: Peer[]): string {
-  const peerPart = renderPeerBlocks(peers);
+/** Renders a peer block for a peer that only exists in the host file (i.e. it
+ *  is not managed by the database), so it can be preserved verbatim on write
+ *  instead of being silently dropped. */
+export function renderHostPeerBlock(hostPeer: HostPeer): string {
+  const lines = [`# ${hostPeer.name ?? 'peer'}`, '[Peer]', `PublicKey = ${hostPeer.publicKey}`];
+  if (hostPeer.presharedKey) lines.push(`PresharedKey = ${hostPeer.presharedKey}`);
+  if (hostPeer.allowedIps) lines.push(`AllowedIPs = ${hostPeer.allowedIps}`);
+  if (hostPeer.persistentKeepalive) {
+    lines.push(`PersistentKeepalive = ${hostPeer.persistentKeepalive}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Picks the host-file peers that must survive a write: those present in the
+ * file but managed neither by the database nor by an explicit removal request.
+ * Without this, writing the database state back to the host file would delete
+ * any peer the database does not know about (data loss, e.g. after a reset or a
+ * partial import).
+ */
+export function selectPreservedHostPeers(
+  hostPeers: HostPeer[],
+  dbPeers: Peer[],
+  removePublicKeys: Iterable<string> = [],
+): HostPeer[] {
+  const known = new Set(dbPeers.map((peer) => peer.publicKey));
+  const removed = new Set(removePublicKeys);
+  return hostPeers.filter(
+    (hostPeer) =>
+      Boolean(hostPeer.publicKey) && !known.has(hostPeer.publicKey) && !removed.has(hostPeer.publicKey),
+  );
+}
+
+export function composeHostConfig(
+  interfaceBlock: string,
+  peers: Peer[],
+  preserved: HostPeer[] = [],
+): string {
+  const blocks = [renderPeerBlocks(peers), ...preserved.map(renderHostPeerBlock)].filter(Boolean);
+  const peerPart = blocks.join('\n\n');
   return peerPart ? `${interfaceBlock}\n\n${peerPart}\n` : `${interfaceBlock}\n`;
 }
 
@@ -87,13 +125,23 @@ function backupDir(): string {
   return path.join(config.dataDir, 'backups', 'wgconfig');
 }
 
-export function writeHostConfig(iface: string, peers: Peer[]): WriteResult {
+export interface WriteOptions {
+  /** Public keys that must be removed from the host file (explicit deletes). */
+  removePublicKeys?: string[];
+}
+
+export function writeHostConfig(iface: string, peers: Peer[], options: WriteOptions = {}): WriteResult {
   const file = hostConfigPath(iface);
   if (!fs.existsSync(file)) {
     throw new Error(`Host configuration not found: ${file}`);
   }
   const current = fs.readFileSync(file, 'utf8');
-  const next = composeHostConfig(readInterfaceBlock(current), peers);
+  const preserved = selectPreservedHostPeers(
+    parseHostConfig(current).peers,
+    peers,
+    options.removePublicKeys ?? [],
+  );
+  const next = composeHostConfig(readInterfaceBlock(current), peers, preserved);
   const nextHash = hashContent(next);
   if (nextHash === hashContent(current)) {
     lastWrittenHash = nextHash;
@@ -189,13 +237,16 @@ export async function importHostConfig(iface: string): Promise<ImportResult> {
     } else {
       const nextPsk = hostPeer.presharedKey ?? null;
       const nextKeepalive = hostPeer.persistentKeepalive ?? current.persistentKeepalive;
+      const nextAddress = address || current.address;
       if (
         nextPsk !== current.presharedKey ||
         nextKeepalive !== current.persistentKeepalive ||
         (allowedIps && allowedIps !== current.allowedIps) ||
+        (nextAddress && nextAddress !== current.address) ||
         !current.enabled
       ) {
         peerRepo.update(current.id, {
+          address: nextAddress,
           allowedIps: allowedIps || current.allowedIps,
           presharedKey: nextPsk,
           persistentKeepalive: nextKeepalive,
@@ -271,4 +322,10 @@ export function stopHostWatcher(): void {
   }
 }
 
-export const _internal = { composeHostConfig, readInterfaceBlock, renderPeerBlocks };
+export const _internal = {
+  composeHostConfig,
+  readInterfaceBlock,
+  renderPeerBlocks,
+  renderHostPeerBlock,
+  selectPreservedHostPeers,
+};

@@ -1,0 +1,35 @@
+# WireGuard GUI — single-service deployment (host network mode).
+#
+#   docker compose up -d --build
+#
+# Host networking is used so the app can see/create the WireGuard interface in
+# the host network namespace and adopt existing configurations from
+# /etc/wireguard. A `.env` file is optional: without it the app generates a
+# session secret and shows a first-run setup wizard at http://<server-ip>:3000.
+#
+# IP forwarding is enabled automatically by the app when the interface starts,
+# so no manual `sysctl` step is required.
+#
+# Note: host networking requires Linux (it is not supported by Docker Desktop
+# on macOS/Windows). For local UI development use `npm run dev`.
+services:
+  wireguard-gui:
+    build: .
+    image: wireguard-gui:latest
+    container_name: wireguard-gui
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATA_DIR: /app/data
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./data:/app/data
+      - /lib/modules:/lib/modules:ro
+      - /etc/wireguard:/etc/wireguard:ro

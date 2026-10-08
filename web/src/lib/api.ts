@@ -16,6 +16,8 @@ export interface ServerConfigView {
   allowedIps: string;
   persistentKeepalive: number;
   enabled: boolean;
+  managedExternally: boolean;
+  writeThrough: boolean;
 }
 
 export interface PeerRuntimeStatus {
@@ -45,6 +47,8 @@ export interface InterfaceStatus {
   backend: 'real' | 'mock';
   wgAvailable: boolean;
   managedExternally: boolean;
+  writeThrough: boolean;
+  hostWritable: boolean;
   preflight: PreflightInfo;
   peerCount: number;
   onlinePeers: number;
@@ -117,6 +121,7 @@ export interface SetupStatus {
 export interface SetupInput {
   mode?: 'fresh' | 'adopt';
   adoptInterface?: string;
+  writeThrough?: boolean;
   username: string;
   password: string;
   endpoint?: string;
@@ -202,6 +207,7 @@ export const api = {
   serverUp: () => jsonRequest<InterfaceStatus>('/server/up', 'POST'),
   serverDown: () => jsonRequest<InterfaceStatus>('/server/down', 'POST'),
   serverRestart: () => jsonRequest<InterfaceStatus>('/server/restart', 'POST'),
+  serverReapply: () => jsonRequest<InterfaceStatus>('/server/reapply', 'POST'),
 
   // peers
   listPeers: () => request<PeerView[]>('/peers'),

@@ -4,6 +4,7 @@ import type { InterfaceStatus, ServerConfig } from '../types';
 import { isWgAvailable } from '../wg/binary';
 import { getBackend } from '../wg/backend';
 import { getPreflightCached } from '../wg/preflight';
+import { hostWritable, writeHostConfig } from '../wg/host-sync';
 import { generateKeyPair } from '../wg/keys';
 import { serverAddressFromCidr } from '../utils/ip';
 
@@ -23,6 +24,7 @@ export async function bootstrapServerConfig(): Promise<void> {
     persistentKeepalive: config.env.WG_PERSISTENT_KEEPALIVE,
     enabled: false,
     managedExternally: false,
+    writeThrough: false,
   });
 }
 
@@ -43,10 +45,26 @@ export async function updateServerConfig(
   const updated = serverRepo.update(patch);
   const backend = await getBackend();
   const peers = peerRepo.list();
+  if (updated.managedExternally && updated.writeThrough && hostWritable(config.env.WG_INTERFACE)) {
+    writeHostConfig(config.env.WG_INTERFACE, peers);
+  }
   if (updated.enabled) {
     await backend.sync(updated, peers);
   }
   return updated;
+}
+
+/** Re-applies the current database state to the host file and live interface. */
+export async function reapplyServer(): Promise<void> {
+  const server = getServerConfig();
+  const peers = peerRepo.list();
+  if (server.managedExternally && server.writeThrough && hostWritable(config.env.WG_INTERFACE)) {
+    writeHostConfig(config.env.WG_INTERFACE, peers);
+  }
+  if (server.enabled) {
+    const backend = await getBackend();
+    await backend.sync(server, peers);
+  }
 }
 
 export async function setServerEnabled(enabled: boolean): Promise<void> {
@@ -113,6 +131,8 @@ export async function getInterfaceStatus(): Promise<InterfaceStatus> {
     backend: backend.kind,
     wgAvailable: available,
     managedExternally: server.managedExternally,
+    writeThrough: server.writeThrough,
+    hostWritable: hostWritable(config.env.WG_INTERFACE),
     preflight,
     peerCount: peers.filter((p) => p.enabled).length,
     onlinePeers: peerStatuses.filter((p) => p.online).length,

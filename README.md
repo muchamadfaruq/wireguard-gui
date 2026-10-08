@@ -62,19 +62,31 @@ That's it. No `.env` file is required.
 
 ### Existing WireGuard on the host
 
-On first start the app looks for configurations in `/etc/wireguard` (mounted
-read-only) and always asks how to proceed:
+On first start the app looks for configurations in `/etc/wireguard` and always
+asks how to proceed:
 
 - **Adopt** — imports the interface settings and peers into the GUI. The host
   keeps owning the interface lifecycle (start/stop is disabled in the GUI), and
-  peer changes are applied live via `wg syncconf`. Peers imported from the host
-  have no private key, so client configs/QR codes cannot be generated for them.
+  peer changes are applied live via `wg syncconf`.
+  - **Two-way sync**: with *write-through* enabled (default), every change is
+    also written back to the host `wg0.conf`, and manual edits to that file are
+    imported back into the app automatically (a file watcher is used). The
+    `[Interface]` block is preserved verbatim; only `[Peer]` blocks are managed
+    by the app. A backup is written to `data/backups/wgconfig/` before each write.
+  - Peers imported from the host have no private key, so client configs/QR codes
+    cannot be generated for them. Use **Recreate** to generate a new key pair for
+    such a peer (the device must re-import the new configuration).
 - **Start fresh** — creates a new server configuration managed by the app. A
   safety guard refuses to touch an existing interface it does not own.
 
 The image bundles a userspace implementation (`wireguard-go`). If the host
 kernel has no WireGuard module, the interface is brought up with the userspace
 fallback automatically.
+
+> The compose file mounts `/etc/wireguard` **read-write** for two-way sync. On
+> SELinux systems append `:z` (e.g. `/etc/wireguard:/etc/wireguard:z`). If the
+> directory is not writable, write-through is disabled automatically (with a
+> warning in Settings), while imports keep working.
 
 ### Optional configuration
 

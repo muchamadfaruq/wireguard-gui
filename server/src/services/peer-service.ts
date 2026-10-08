@@ -1,18 +1,36 @@
 import QRCode from 'qrcode';
+import { config } from '../config';
 import { peerRepo, serverRepo } from '../db/repositories';
 import type { Peer, PeerView } from '../types';
 import { getBackend } from '../wg/backend';
 import { generateClientConfig } from '../wg/config';
+import { hostWritable, writeHostConfig } from '../wg/host-sync';
 import { generateKeyPair, generatePresharedKey } from '../wg/keys';
 import { nextFreeHostIp } from '../utils/ip';
 import { ApiError, notFound } from '../utils/http-error';
 import { getInterfaceStatus } from './server-service';
 
-async function syncIfEnabled(): Promise<void> {
+/**
+ * Persists the desired peer state (write-through to the host config when in
+ * adopt mode) and applies it to the running interface. On failure the provided
+ * rollback is executed so the database stays consistent with the host file.
+ */
+async function applyMutation(rollback?: () => void): Promise<void> {
   const server = serverRepo.get();
-  if (!server || !server.enabled) return;
-  const backend = await getBackend();
-  await backend.sync(server, peerRepo.list());
+  if (!server) return;
+  const iface = config.env.WG_INTERFACE;
+  try {
+    if (server.managedExternally && server.writeThrough && hostWritable(iface)) {
+      writeHostConfig(iface, peerRepo.list());
+    }
+    if (server.enabled) {
+      const backend = await getBackend();
+      await backend.sync(server, peerRepo.list());
+    }
+  } catch (error) {
+    if (rollback) rollback();
+    throw error;
+  }
 }
 
 export interface CreatePeerInput {
@@ -47,7 +65,7 @@ export async function createPeer(input: CreatePeerInput): Promise<Peer> {
     notes: input.notes ?? null,
   });
 
-  await syncIfEnabled();
+  await applyMutation(() => peerRepo.delete(peer.id));
   return peer;
 }
 
@@ -55,29 +73,37 @@ export async function updatePeer(
   id: string,
   patch: Partial<Pick<Peer, 'name' | 'enabled' | 'allowedIps' | 'persistentKeepalive' | 'notes'>>,
 ): Promise<Peer> {
+  const before = peerRepo.get(id);
+  if (!before) throw notFound('Peer not found');
   const peer = peerRepo.update(id, patch);
-  await syncIfEnabled();
+  await applyMutation(() => peerRepo.restore(before));
   return peer;
 }
 
 export async function deletePeer(id: string): Promise<void> {
+  const before = peerRepo.get(id);
+  if (!before) throw notFound('Peer not found');
   peerRepo.delete(id);
-  await syncIfEnabled();
+  await applyMutation(() => peerRepo.restore(before));
 }
 
 export async function regeneratePeerKeys(id: string): Promise<Peer> {
   const existing = peerRepo.get(id);
   if (!existing) throw notFound('Peer not found');
-  if (!existing.privateKey) {
+  const server = serverRepo.get();
+  const writeThroughEnabled = Boolean(
+    server?.managedExternally && server.writeThrough && hostWritable(config.env.WG_INTERFACE),
+  );
+  if (!existing.privateKey && !writeThroughEnabled) {
     throw new ApiError(
       400,
       'Cannot regenerate keys for a peer imported from an external interface. ' +
-        'Manage this peer directly on the host.',
+        'Enable write-through in Settings, or manage this peer directly on the host.',
     );
   }
   const { privateKey, publicKey } = await generateKeyPair();
   const peer = peerRepo.update(id, { privateKey, publicKey });
-  await syncIfEnabled();
+  await applyMutation(() => peerRepo.restore(existing));
   return peer;
 }
 
@@ -89,7 +115,7 @@ export function getPeerConfig(id: string): { peer: Peer; config: string } {
     throw new ApiError(
       400,
       'This peer was imported from an external interface, so its private key is not available. ' +
-        'A client configuration cannot be generated for it.',
+        'Use "Recreate with new keys" to make it exportable.',
     );
   }
   return { peer, config: generateClientConfig(server, peer) };

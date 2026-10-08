@@ -1,12 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Save, KeyRound } from 'lucide-react';
+import { AlertTriangle, Loader2, RefreshCw, Save, KeyRound, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
 import { CopyButton } from '@/components/copy-button';
@@ -39,8 +41,14 @@ export function SettingsPage() {
     queryKey: ['server-config'],
     queryFn: api.getServerConfig,
   });
+  const { data: status } = useQuery({
+    queryKey: ['status'],
+    queryFn: api.getStatus,
+    refetchInterval: 15_000,
+  });
   const [form, setForm] = useState<FormState>(EMPTY);
   const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
+  const adoptMode = Boolean(data?.managedExternally);
 
   useEffect(() => {
     if (!data) return;
@@ -87,6 +95,28 @@ export function SettingsPage() {
       toast.error(error instanceof ApiError ? error.message : 'Failed to update password'),
   });
 
+  const toggleWriteThrough = useMutation({
+    mutationFn: (enabled: boolean) => api.updateServerConfig({ writeThrough: enabled }),
+    onSuccess: (_result, enabled) => {
+      toast.success(enabled ? 'Write-through enabled' : 'Write-through disabled');
+      void queryClient.invalidateQueries({ queryKey: ['server-config'] });
+      void queryClient.invalidateQueries({ queryKey: ['status'] });
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : 'Failed to update write-through'),
+  });
+
+  const reapply = useMutation({
+    mutationFn: api.serverReapply,
+    onSuccess: () => {
+      toast.success('Re-applied to host config and interface');
+      void queryClient.invalidateQueries({ queryKey: ['server-config'] });
+      void queryClient.invalidateQueries({ queryKey: ['status'] });
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : 'Failed to re-apply'),
+  });
+
   const onSubmitServer = (event: FormEvent) => {
     event.preventDefault();
     saveServer.mutate();
@@ -105,8 +135,9 @@ export function SettingsPage() {
     changePassword.mutate();
   };
 
-  const field = (key: keyof FormState) => ({
+  const field = (key: keyof FormState, disabled = false) => ({
     value: form[key],
+    disabled,
     onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
       setForm((prev) => ({ ...prev, [key]: event.target.value })),
   });
@@ -153,11 +184,11 @@ export function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="listenPort">Listen port</Label>
-                  <Input id="listenPort" type="number" {...field('listenPort')} />
+                  <Input id="listenPort" type="number" {...field('listenPort', adoptMode)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="mtu">MTU</Label>
-                  <Input id="mtu" type="number" {...field('mtu')} />
+                  <Input id="mtu" type="number" {...field('mtu', adoptMode)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="keepalive">Persistent keepalive</Label>
@@ -165,13 +196,20 @@ export function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="subnet">Subnet (CIDR)</Label>
-                  <Input id="subnet" {...field('subnet')} />
+                  <Input id="subnet" {...field('subnet', adoptMode)} />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="address">Server address</Label>
-                  <Input id="address" {...field('address')} />
+                  <Input id="address" {...field('address', adoptMode)} />
                 </div>
               </div>
+
+              {adoptMode ? (
+                <p className="text-xs text-muted-foreground">
+                  Fields owned by the host interface (port, MTU, subnet, address) are read-only in
+                  adopt mode.
+                </p>
+              ) : null}
 
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="min-w-0">
@@ -191,6 +229,62 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {adoptMode ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-muted-foreground" />
+              Host config sync
+            </CardTitle>
+            <CardDescription>
+              Keep <code>/etc/wireguard</code> in sync with this app (two-way).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Write-through to host config</p>
+                <p className="text-xs text-muted-foreground">
+                  Persist peer changes to the host file so they survive reboots. Manual edits to the
+                  file are also imported automatically.
+                </p>
+              </div>
+              <Switch
+                checked={Boolean(data?.writeThrough)}
+                disabled={toggleWriteThrough.isPending}
+                onCheckedChange={(checked) => toggleWriteThrough.mutate(checked)}
+              />
+            </div>
+
+            {!status?.hostWritable ? (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  The host config is not writable. Ensure <code>/etc/wireguard</code> is mounted
+                  read-write in <code>docker-compose.yml</code> (and add <code>:z</code> on SELinux
+                  systems).
+                </span>
+              </div>
+            ) : (
+              <Badge variant="success" className="gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Host config is writable
+              </Badge>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => reapply.mutate()}
+              disabled={reapply.isPending}
+            >
+              {reapply.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              Re-apply now
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

@@ -32,4 +32,6 @@ services:
     volumes:
       - ./data:/app/data
       - /lib/modules:/lib/modules:ro
-      - /etc/wireguard:/etc/wireguard:ro
+      # Mounted read-write so peer changes can be written back (two-way sync).
+      # On SELinux systems append ":z" (e.g. /etc/wireguard:/etc/wireguard:z).
+      - /etc/wireguard:/etc/wireguard

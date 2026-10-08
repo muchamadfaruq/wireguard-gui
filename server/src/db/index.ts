@@ -51,7 +51,8 @@ CREATE TABLE IF NOT EXISTS server (
   allowed_ips TEXT NOT NULL,
   persistent_keepalive INTEGER NOT NULL,
   enabled INTEGER NOT NULL DEFAULT 0,
-  managed_externally INTEGER NOT NULL DEFAULT 0
+  managed_externally INTEGER NOT NULL DEFAULT 0,
+  write_through INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS peers (
@@ -90,6 +91,9 @@ function runMigrations(database: SqliteDatabase): void {
     database.exec(
       'ALTER TABLE server ADD COLUMN managed_externally INTEGER NOT NULL DEFAULT 0;',
     );
+  }
+  if (!tableHasColumn(database, 'server', 'write_through')) {
+    database.exec('ALTER TABLE server ADD COLUMN write_through INTEGER NOT NULL DEFAULT 0;');
   }
 }
 

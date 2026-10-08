@@ -2,6 +2,7 @@ import { config, ensureDataDirs } from './config';
 import { initDb } from './db';
 import { ensureBootstrapUser, purgeExpiredSessions } from './services/auth-service';
 import { bootstrapServerConfig } from './services/server-service';
+import { ensureHostWatcher } from './services/host-sync-service';
 import { getBackend } from './wg/backend';
 import { buildApp } from './app';
 
@@ -11,6 +12,7 @@ async function main(): Promise<void> {
   ensureBootstrapUser();
   purgeExpiredSessions();
   await bootstrapServerConfig();
+  ensureHostWatcher();
 
   const backend = await getBackend();
   const app = await buildApp();

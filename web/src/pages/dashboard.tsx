@@ -133,6 +133,9 @@ export function DashboardPage() {
             <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
               This interface was <strong>adopted</strong> from an existing host configuration. Its
               lifecycle (start/stop) is managed by the host — changes to peers are applied live.
+              {status.writeThrough
+                ? ' Changes are written back to /etc/wireguard.'
+                : ' Enable write-through in Settings to persist changes to the host config.'}
             </div>
           ) : null}
 

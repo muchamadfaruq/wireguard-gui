@@ -16,6 +16,7 @@ const server: ServerConfig = {
   persistentKeepalive: 25,
   enabled: true,
   managedExternally: false,
+  writeThrough: false,
 };
 
 const peer: Peer = {

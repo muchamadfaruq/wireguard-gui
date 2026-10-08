@@ -135,7 +135,7 @@ function AddPeerDialog({
   );
 }
 
-function PeerCard({ peer }: { peer: PeerView }) {
+function PeerCard({ peer, canRekey }: { peer: PeerView; canRekey: boolean }) {
   const queryClient = useQueryClient();
   const [qrOpen, setQrOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -200,6 +200,9 @@ function PeerCard({ peer }: { peer: PeerView }) {
         {!peer.hasPrivateKey ? (
           <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
             Imported from an external interface — private key unavailable, so no client config/QR.
+            {canRekey
+              ? ' Use "Recreate" to generate a new key (the device must re-import).'
+              : ' Enable write-through in Settings to recreate it.'}
           </p>
         ) : null}
 
@@ -214,7 +217,12 @@ function PeerCard({ peer }: { peer: PeerView }) {
             <QrCode />
             QR
           </Button>
-          <CopyButton value={peer.config} label="Copy" className={!peer.hasPrivateKey ? 'pointer-events-none opacity-50' : ''} />
+          <CopyButton
+            value={peer.config}
+            label="Copy"
+            disabled={!peer.hasPrivateKey}
+            title={peer.hasPrivateKey ? 'Copy client config' : 'Private key unavailable'}
+          />
           <Button size="sm" variant="outline" asChild disabled={!peer.hasPrivateKey}>
             <a
               href={downloadUrl(`/peers/${peer.id}/config`)}
@@ -230,8 +238,14 @@ function PeerCard({ peer }: { peer: PeerView }) {
             size="sm"
             variant="ghost"
             onClick={() => setConfirmRegen(true)}
-            disabled={!peer.hasPrivateKey}
-            title={peer.hasPrivateKey ? 'Regenerate keys' : 'Private key unavailable (external peer)'}
+            disabled={!peer.hasPrivateKey && !canRekey}
+            title={
+              peer.hasPrivateKey
+                ? 'Regenerate keys'
+                : canRekey
+                  ? 'Recreate with new keys (device must re-import)'
+                  : 'Private key unavailable (external peer)'
+            }
           >
             <RefreshCw />
           </Button>
@@ -279,9 +293,13 @@ function PeerCard({ peer }: { peer: PeerView }) {
       <ConfirmDialog
         open={confirmRegen}
         onOpenChange={setConfirmRegen}
-        title="Regenerate keys?"
-        description="The peer will need to import a new configuration; the old one stops working."
-        confirmLabel="Regenerate"
+        title={peer.hasPrivateKey ? 'Regenerate keys?' : 'Recreate with new keys?'}
+        description={
+          peer.hasPrivateKey
+            ? 'The peer will need to import a new configuration; the old one stops working.'
+            : 'A new key pair will be generated and written to /etc/wireguard. The existing device stops working until it imports the new configuration.'
+        }
+        confirmLabel={peer.hasPrivateKey ? 'Regenerate' : 'Recreate'}
         loading={regen.isPending}
         onConfirm={() => regen.mutate()}
       />
@@ -296,6 +314,12 @@ export function PeersPage() {
     queryFn: api.listPeers,
     refetchInterval: 10_000,
   });
+  const { data: status } = useQuery({
+    queryKey: ['status'],
+    queryFn: api.getStatus,
+    refetchInterval: 10_000,
+  });
+  const canRekey = Boolean(status?.writeThrough);
 
   return (
     <div className="space-y-6">
@@ -316,6 +340,17 @@ export function PeersPage() {
         }
       />
 
+      {status?.managedExternally ? (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+          <strong>Adopt mode:</strong> the interface is managed by the host from{' '}
+          <code>/etc/wireguard</code>. Peers imported from the host have no private key, so QR/Config
+          are unavailable for them. Add a peer here, or use <strong>Recreate</strong> to generate new
+          keys. {status.writeThrough
+            ? 'Changes are written back to the host config.'
+            : 'Enable write-through in Settings to persist changes to the host config.'}
+        </div>
+      ) : null}
+
       {isLoading ? (
         <div className="space-y-4">
           <Skeleton className="h-40 w-full" />
@@ -326,7 +361,7 @@ export function PeersPage() {
       ) : peers && peers.length > 0 ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {peers.map((peer) => (
-            <PeerCard key={peer.id} peer={peer} />
+            <PeerCard key={peer.id} peer={peer} canRekey={canRekey} />
           ))}
         </div>
       ) : (

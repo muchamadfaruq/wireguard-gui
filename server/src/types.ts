@@ -12,6 +12,7 @@ export interface ServerConfig {
   persistentKeepalive: number;
   enabled: boolean;
   managedExternally: boolean;
+  writeThrough: boolean;
 }
 
 export interface Peer {
@@ -77,6 +78,8 @@ export interface InterfaceStatus {
   backend: 'real' | 'mock';
   wgAvailable: boolean;
   managedExternally: boolean;
+  writeThrough: boolean;
+  hostWritable: boolean;
   preflight: PreflightInfo;
   peerCount: number;
   onlinePeers: number;

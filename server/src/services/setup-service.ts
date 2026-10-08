@@ -8,6 +8,7 @@ import { getPreflightCached, listHostConfigs } from '../wg/preflight';
 import { isValidIpv4Cidr, serverAddressFromCidr } from '../utils/ip';
 import { ApiError } from '../utils/http-error';
 import { createAdmin, isInitialized, type User } from './auth-service';
+import { ensureHostWatcher } from './host-sync-service';
 import { getServerConfig, setServerEnabled, updateServerConfig } from './server-service';
 
 export type SetupMode = 'fresh' | 'adopt';
@@ -42,6 +43,7 @@ export interface SetupStatus {
 export interface SetupInput {
   mode?: SetupMode;
   adoptInterface?: string;
+  writeThrough?: boolean;
   username: string;
   password: string;
   endpoint?: string;
@@ -114,9 +116,13 @@ export async function runSetup(input: SetupInput): Promise<SetupResult> {
     // Adopt before creating the admin so a failure does not leave the instance
     // in a half-initialised state.
     await adoptHostConfig(iface);
-    if (input.endpoint !== undefined) {
-      serverRepo.update({ endpoint: input.endpoint.trim() });
+    const adoptPatch: Partial<ServerConfig> = {};
+    if (input.writeThrough !== undefined) adoptPatch.writeThrough = input.writeThrough;
+    if (input.endpoint !== undefined) adoptPatch.endpoint = input.endpoint.trim();
+    if (Object.keys(adoptPatch).length > 0) {
+      serverRepo.update(adoptPatch);
     }
+    ensureHostWatcher();
   } else {
     const current = getServerConfig();
     const patch: Partial<Omit<ServerConfig, 'id' | 'privateKey' | 'publicKey' | 'enabled'>> = {};

@@ -16,6 +16,7 @@ interface ServerRow {
   persistent_keepalive: number;
   enabled: number;
   managed_externally: number;
+  write_through: number;
 }
 
 interface PeerRow {
@@ -55,6 +56,7 @@ function mapServer(row: ServerRow): ServerConfig {
     persistentKeepalive: row.persistent_keepalive,
     enabled: Boolean(row.enabled),
     managedExternally: Boolean(row.managed_externally),
+    writeThrough: Boolean(row.write_through),
   };
 }
 
@@ -93,8 +95,8 @@ export const serverRepo = {
     getDb()
       .prepare(
         `INSERT INTO server (id, private_key, public_key, address, subnet, listen_port, mtu, dns,
-          endpoint, allowed_ips, persistent_keepalive, enabled, managed_externally)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          endpoint, allowed_ips, persistent_keepalive, enabled, managed_externally, write_through)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         server.privateKey,
@@ -109,6 +111,7 @@ export const serverRepo = {
         server.persistentKeepalive,
         server.enabled ? 1 : 0,
         server.managedExternally ? 1 : 0,
+        server.writeThrough ? 1 : 0,
       );
     return this.get()!;
   },
@@ -120,7 +123,7 @@ export const serverRepo = {
       .prepare(
         `UPDATE server SET private_key = ?, public_key = ?, address = ?, subnet = ?, listen_port = ?,
           mtu = ?, dns = ?, endpoint = ?, allowed_ips = ?, persistent_keepalive = ?, enabled = ?,
-          managed_externally = ?
+          managed_externally = ?, write_through = ?
          WHERE id = 1`,
       )
       .run(
@@ -136,6 +139,7 @@ export const serverRepo = {
         next.persistentKeepalive,
         next.enabled ? 1 : 0,
         next.managedExternally ? 1 : 0,
+        next.writeThrough ? 1 : 0,
       );
     return this.get()!;
   },
@@ -199,6 +203,27 @@ export const peerRepo = {
   },
   delete(id: string): void {
     getDb().prepare('DELETE FROM peers WHERE id = ?').run(id);
+  },
+  restore(peer: Peer): void {
+    getDb()
+      .prepare(
+        `INSERT OR REPLACE INTO peers (id, name, public_key, private_key, preshared_key, address,
+          allowed_ips, persistent_keepalive, enabled, created_at, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        peer.id,
+        peer.name,
+        peer.publicKey,
+        peer.privateKey,
+        peer.presharedKey,
+        peer.address,
+        peer.allowedIps,
+        peer.persistentKeepalive,
+        peer.enabled ? 1 : 0,
+        peer.createdAt,
+        peer.notes,
+      );
   },
 };
 

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   getInterfaceStatus,
   getServerConfigView,
+  reapplyServer,
   restartServer,
   setServerEnabled,
   updateServerConfig,
@@ -17,6 +18,7 @@ const patchSchema = z.object({
   endpoint: z.string().optional(),
   allowedIps: z.string().min(1).optional(),
   persistentKeepalive: z.number().int().min(0).max(3600).optional(),
+  writeThrough: z.boolean().optional(),
 });
 
 export async function serverRoutes(app: FastifyInstance): Promise<void> {
@@ -42,6 +44,11 @@ export async function serverRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/restart', async () => {
     await restartServer();
+    return getInterfaceStatus();
+  });
+
+  app.post('/reapply', async () => {
+    await reapplyServer();
     return getInterfaceStatus();
   });
 }

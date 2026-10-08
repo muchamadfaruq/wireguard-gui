@@ -37,6 +37,7 @@ interface FormState {
   persistentKeepalive: string;
   useFullTunnel: boolean;
   startInterface: boolean;
+  writeThrough: boolean;
   token: string;
 }
 
@@ -52,6 +53,7 @@ const EMPTY: FormState = {
   persistentKeepalive: '25',
   useFullTunnel: true,
   startInterface: true,
+  writeThrough: true,
   token: '',
 };
 
@@ -222,6 +224,7 @@ export function SetupPage() {
     if (hasHostConfig && mode === 'adopt') {
       input.adoptInterface = adoptInterface;
       input.endpoint = form.endpoint.trim();
+      input.writeThrough = form.writeThrough;
     } else {
       input.endpoint = form.endpoint.trim();
       input.subnet = form.subnet.trim();
@@ -360,14 +363,28 @@ export function SetupPage() {
             {step === networkStep ? (
               <div className="space-y-4">
                 {hasHostConfig && mode === 'adopt' ? (
-                  <div className="flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
-                    <Server className="mt-0.5 h-4 w-4 text-primary" />
-                    <div>
-                      <p className="font-medium">Adopting "{adoptInterface}"</p>
-                      <p className="text-xs text-muted-foreground">
-                        The interface lifecycle stays with the host. Peers imported from the host
-                        have no private key, so client configs/QR cannot be generated for them.
-                      </p>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+                      <Server className="mt-0.5 h-4 w-4 text-primary" />
+                      <div>
+                        <p className="font-medium">Adopting "{adoptInterface}"</p>
+                        <p className="text-xs text-muted-foreground">
+                          The interface lifecycle stays with the host. Peers imported from the host
+                          have no private key, so client configs/QR cannot be generated for them.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <p className="text-sm font-medium">Write changes to host config</p>
+                        <p className="text-xs text-muted-foreground">
+                          Keep <code>/etc/wireguard</code> in sync (two-way). Recommended.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={form.writeThrough}
+                        onCheckedChange={(checked) => set('writeThrough', checked)}
+                      />
                     </div>
                   </div>
                 ) : null}

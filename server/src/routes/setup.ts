@@ -9,6 +9,7 @@ import { detectPublicIpv4 } from '../utils/public-ip';
 const setupSchema = z.object({
   mode: z.enum(['fresh', 'adopt']).optional(),
   adoptInterface: z.string().optional(),
+  writeThrough: z.boolean().optional(),
   username: z.string().min(1).max(64),
   password: z.string().min(6),
   endpoint: z.string().optional(),

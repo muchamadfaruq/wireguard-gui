@@ -55,7 +55,7 @@ export function DashboardPage() {
   const { data: status, isLoading } = useQuery({
     queryKey: ['status'],
     queryFn: api.getStatus,
-    refetchInterval: 10_000,
+    refetchInterval: 15_000,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['status'] });

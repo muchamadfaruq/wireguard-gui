@@ -22,6 +22,9 @@ container. Modern, mobile-friendly interface with a first-run setup wizard.
 - **Backup & restore**: export the whole state (database + configs) to a ZIP and
   restore it with an automatic safety copy.
 - **Authentication**: simple admin login with hashed passwords and sessions.
+- **Multi-language UI**: English, Bahasa Indonesia, Español, Français and Deutsch.
+- **Per-OS setup guide**: step-by-step instructions to connect Android, iOS,
+  Windows, macOS and Linux clients.
 - **Dark/light theme** and a responsive layout (desktop sidebar + mobile bottom nav).
 
 ## Tech stack
@@ -31,7 +34,7 @@ container. Modern, mobile-friendly interface with a first-run setup wizard.
 | Frontend | React 18, Vite, TypeScript, Tailwind CSS, Radix UI |
 | Backend  | Node.js 24, Fastify, TypeScript                   |
 | Database | SQLite (built-in `node:sqlite`)                   |
-| Runtime  | Docker (WireGuard tools + iptables)               |
+| Runtime  | Docker (Alpine image with WireGuard tools + iptables) |
 
 > **Note on the database:** this project uses Node's built-in `node:sqlite`
 > module, so there is **no native compilation step** and no `better-sqlite3`.
@@ -140,12 +143,14 @@ mode (the container has its own network namespace):
 2. **Peers** – add a peer, then use **QR** or **Config** to connect a device. The
    optional *Extra allowed IPs* field routes additional networks to a device
    (e.g. a LAN behind it); the device's tunnel address is always included.
-3. **Configs** – import `.conf` files from elsewhere and keep them handy.
-4. **Settings** – change the public endpoint, DNS, subnet, port, and password.
-   Changing the interface address, subnet, or MTU rebuilds the WireGuard
-   interface (connected clients reconnect automatically); other changes are
-   applied live.
-5. **Backup** – export a ZIP regularly; restore it any time.
+3. **Guide** – step-by-step instructions to import and activate a configuration on
+   Android, iOS, Windows, macOS and Linux.
+4. **Configs** – import `.conf` files from elsewhere and keep them handy.
+5. **Settings** – change the public endpoint, DNS, subnet, port, password and the
+   interface **language**. Changing the interface address, subnet, or MTU rebuilds
+   the WireGuard interface (connected clients reconnect automatically); other
+   changes are applied live.
+6. **Backup** – export a ZIP regularly; restore it any time.
 
 ## Local development
 
@@ -225,12 +230,12 @@ GET    /api/backup                POST   /api/backup/restore (multipart)
 
 ```
 wireguard-gui/
-├── Dockerfile                  # multi-stage build (web + server)
+├── Dockerfile                  # multi-stage build (web + server, Alpine runtime)
 ├── docker-compose.yml          # single-service deployment
 ├── server/                     # Fastify + TypeScript backend
 │   └── src/{routes,services,wg,db,auth}
 └── web/                        # React + Vite frontend
-    └── src/{pages,components,layouts,hooks,lib}
+    └── src/{pages,components,layouts,hooks,lib/locales}
 ```
 
 ## License

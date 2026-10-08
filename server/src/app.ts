@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
@@ -18,6 +19,9 @@ import { backupRoutes } from './routes/backup';
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify({
     logger: { level: config.env.NODE_ENV === 'production' ? 'info' : 'debug' },
+    // Per-request logs are noisy and generate disk I/O on small servers; keep
+    // them off in production and only log lifecycle events and errors.
+    disableRequestLogging: config.env.NODE_ENV === 'production',
     trustProxy: true,
     bodyLimit: 5 * 1024 * 1024,
   });
@@ -83,7 +87,20 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   const webDistExists = fs.existsSync(config.webDist);
   if (webDistExists) {
-    await app.register(fastifyStatic, { root: config.webDist, wildcard: false });
+    await app.register(fastifyStatic, {
+      root: config.webDist,
+      wildcard: false,
+      // Vite emits content-hashed asset filenames, so they can be cached
+      // aggressively. index.html must stay revalidated so new builds are picked
+      // up immediately.
+      maxAge: '1y',
+      immutable: true,
+      setHeaders(res, filePath) {
+        if (path.basename(filePath) === 'index.html') {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      },
+    });
   }
 
   app.setNotFoundHandler((req, reply) => {

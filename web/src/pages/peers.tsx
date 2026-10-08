@@ -314,12 +314,12 @@ export function PeersPage() {
   const { data: peers, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['peers'],
     queryFn: api.listPeers,
-    refetchInterval: 10_000,
+    refetchInterval: 15_000,
   });
   const { data: status } = useQuery({
     queryKey: ['status'],
     queryFn: api.getStatus,
-    refetchInterval: 10_000,
+    refetchInterval: 15_000,
   });
   const canRekey = Boolean(status?.writeThrough);
 

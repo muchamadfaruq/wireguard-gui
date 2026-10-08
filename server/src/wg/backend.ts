@@ -21,6 +21,15 @@ export interface WgBackend {
   status(server: ServerConfig, peers: Peer[]): Promise<BackendStatus>;
 }
 
+/**
+ * `wg show` is an external process; the dashboard/peers pages poll status
+ * frequently, so coalesce concurrent and back-to-back reads into a single call
+ * with a very short TTL. This keeps CPU usage low on small servers.
+ */
+const STATUS_TTL_MS = 2000;
+let statusCache: { iface: string; at: number; running: boolean; peers: PeerRuntimeStatus[] } | null =
+  null;
+
 function configFilePath(iface: string): string {
   return path.join(config.configsDir, `${iface}.conf`);
 }
@@ -120,6 +129,7 @@ export class RealWgBackend implements WgBackend {
 
   async up(server: ServerConfig, peers: Peer[]): Promise<void> {
     const iface = config.env.WG_INTERFACE;
+    statusCache = null;
 
     if (server.managedExternally) {
       if (!(await this.isRunning(iface))) {
@@ -151,6 +161,7 @@ export class RealWgBackend implements WgBackend {
 
   async down(server: ServerConfig): Promise<void> {
     const iface = config.env.WG_INTERFACE;
+    statusCache = null;
     // The lifecycle of an adopted interface is owned by the host.
     if (server.managedExternally) return;
     if (!(await this.isRunning(iface))) return;
@@ -163,6 +174,7 @@ export class RealWgBackend implements WgBackend {
 
   async sync(server: ServerConfig, peers: Peer[]): Promise<void> {
     const iface = config.env.WG_INTERFACE;
+    statusCache = null;
     const egress = await this.egress();
     writeConfigFile(iface, generateServerConfig(server, peers, egress));
     if (!(await this.isRunning(iface))) return;
@@ -197,15 +209,19 @@ export class RealWgBackend implements WgBackend {
 
   async status(_server: ServerConfig, _peers: Peer[]): Promise<BackendStatus> {
     const iface = config.env.WG_INTERFACE;
-    if (!(await this.isRunning(iface))) {
-      return { running: false, peers: [] };
+    const now = Date.now();
+    if (statusCache && statusCache.iface === iface && now - statusCache.at < STATUS_TTL_MS) {
+      return { running: statusCache.running, peers: statusCache.peers };
     }
+    // A single `wg show <iface> dump` both detects the interface and reads its
+    // peers, avoiding an extra process spawn per request.
     const result = await runWg(['show', iface, 'dump']);
-    if (result.code !== 0) {
-      return { running: false, peers: [] };
-    }
-    const dump = parseWgDump(result.stdout);
-    return { running: true, peers: dump.peers };
+    const status: BackendStatus =
+      result.code === 0
+        ? { running: true, peers: parseWgDump(result.stdout).peers }
+        : { running: false, peers: [] };
+    statusCache = { iface, at: now, ...status };
+    return status;
   }
 }
 

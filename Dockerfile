@@ -13,17 +13,17 @@ COPY . .
 RUN npm run build
 
 # ---------- runtime stage ----------
-FROM node:24-bookworm-slim AS runtime
+# Alpine keeps the image small (important on low-spec servers). All the tools
+# the app shells out to are available as packages, including wireguard-go.
+FROM node:24-alpine AS runtime
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
     wireguard-tools \
     wireguard-go \
     iptables \
     iproute2 \
-    ca-certificates \
-    procps \
-  && rm -rf /var/lib/apt/lists/*
+    bash \
+    ca-certificates
 
 WORKDIR /app
 ENV NODE_ENV=production

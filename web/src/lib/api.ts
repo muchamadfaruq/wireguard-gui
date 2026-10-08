@@ -177,11 +177,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 function jsonRequest<T>(path: string, method: string, data?: unknown): Promise<T> {
-  return request<T>(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: data === undefined ? undefined : JSON.stringify(data),
-  });
+  const init: RequestInit = { method };
+  if (data !== undefined) {
+    init.headers = { 'Content-Type': 'application/json' };
+    init.body = JSON.stringify(data);
+  }
+  return request<T>(path, init);
 }
 
 export const api = {

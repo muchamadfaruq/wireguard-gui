@@ -26,6 +26,21 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
   await app.register(rateLimit, { global: false });
 
+  // Tolerate an empty body when Content-Type is application/json (e.g. actions
+  // with no payload), instead of failing with "Body cannot be empty".
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+    const text = typeof body === 'string' ? body : '';
+    if (text.trim() === '') {
+      done(null, undefined);
+      return;
+    }
+    try {
+      done(null, JSON.parse(text));
+    } catch (error) {
+      done(error as Error);
+    }
+  });
+
   app.setErrorHandler((error, req, reply) => {
     if (error instanceof ZodError) {
       return reply.code(400).send({
